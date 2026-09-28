@@ -1,0 +1,89 @@
+---
+export const prerender = false;
+
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { isAuthed } from "@/utils/adminAuth";
+
+if (!(await isAuthed(Astro.cookies))) {
+  return Astro.redirect("/admin/login");
+}
+---
+
+<AdminLayout>
+  <div class="mx-auto max-w-4xl">
+    <header class="mb-6">
+      <h1 class="text-xl font-extrabold">评论管理</h1>
+      <p class="mt-1 text-sm text-foreground/50">全站用户评论的查看与删除</p>
+    </header>
+
+    <div class="overflow-hidden rounded-2xl border border-border/60 bg-card/60">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-border/60 text-xs text-foreground/45">
+            <th class="px-4 py-3 font-medium">时间</th>
+            <th class="px-4 py-3 font-medium">用户</th>
+            <th class="px-4 py-3 font-medium">文章</th>
+            <th class="px-4 py-3 font-medium">内容</th>
+            <th class="px-4 py-3 font-medium">操作</th>
+          </tr>
+        </thead>
+        <tbody id="comment-rows"></tbody>
+      </table>
+      <p id="empty-tip" class="hidden px-4 py-10 text-center text-sm text-foreground/40">
+        暂无评论
+      </p>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  function escapeHtml(text: string): string {
+    return text
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  }
+
+  async function load() {
+    const response = await fetch("/api/admin/comments");
+    if (response.status === 401) {
+      location.href = "/admin/login";
+      return;
+    }
+    const result = await response.json();
+    const comments: any[] = result.comments ?? [];
+    const rows = document.getElementById("comment-rows");
+    if (!rows) return;
+    rows.innerHTML = "";
+    for (const c of comments) {
+      const date = new Date(c.createdAt);
+      const timeText = Number.isNaN(date.getTime())
+        ? "—"
+        : date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const tr = document.createElement("tr");
+      tr.className = "border-b border-border/30 last:border-0";
+      tr.innerHTML = `
+        <td class="whitespace-nowrap px-4 py-2.5 font-firacode text-xs text-foreground/50">${timeText}</td>
+        <td class="whitespace-nowrap px-4 py-2.5 text-xs font-semibold text-foreground/80">${escapeHtml(c.name)}</td>
+        <td class="whitespace-nowrap px-4 py-2.5 font-firacode text-xs text-accent/80">${escapeHtml(c.slug)}</td>
+        <td class="max-w-[22rem] truncate px-4 py-2.5 text-xs text-foreground/65" title="${escapeHtml(c.content)}">${escapeHtml(c.content)}</td>
+        <td class="whitespace-nowrap px-4 py-2.5">
+          <button data-del="${c.id}" type="button" class="cursor-pointer rounded-lg border border-transparent px-2 py-1 text-xs text-red-500/80 transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-500">删除</button>
+        </td>
+      `;
+      rows.appendChild(tr);
+    }
+    rows.querySelectorAll<HTMLButtonElement>("[data-del]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("确定删除这条评论吗？")) return;
+        await fetch(`/api/admin/comments?id=${btn.dataset.del}`, { method: "DELETE" });
+        load();
+      });
+    });
+    const empty = document.getElementById("empty-tip");
+    if (empty) empty.classList.toggle("hidden", comments.length > 0);
+  }
+
+  load();
+</script>

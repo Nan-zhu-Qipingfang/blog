@@ -1,0 +1,172 @@
+---
+export const prerender = false;
+
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { isAuthed } from "@/utils/adminAuth";
+
+// Server-side guard (Astro.redirect only works at page level)
+if (!(await isAuthed(Astro.cookies))) {
+  return Astro.redirect("/admin/login");
+}
+import { hasCustomPassword } from "@/utils/adminAuth";
+
+const customPassword = await hasCustomPassword();
+
+const inputClass =
+  "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60";
+---
+
+<AdminLayout>
+  <div class="mx-auto max-w-2xl">
+    <header class="mb-6">
+      <h1 class="text-xl font-extrabold">设置</h1>
+      <p class="mt-1 text-sm text-foreground/50">后台账号与运行说明</p>
+    </header>
+
+    <section class="rounded-2xl border border-border/60 bg-card/60 p-5">
+      <h2 class="mb-1 text-sm font-bold">修改管理员密码</h2>
+      <p class="mb-4 text-xs text-foreground/45">
+        {
+          customPassword
+            ? "当前使用自定义密码（保存在 src/data/admin/auth.json）"
+            : "当前使用演示默认密码 admin12346，建议尽快修改"
+        }
+      </p>
+      <form id="password-form" class="flex max-w-sm flex-col gap-3">
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">旧密码</span>
+          <input name="oldPassword" type="password" required class={inputClass} autocomplete="current-password" />
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">新密码（至少 6 位）</span>
+          <input name="newPassword" type="password" required minlength="6" class={inputClass} autocomplete="new-password" />
+        </label>
+        <p id="password-status" class="hidden rounded-lg px-3 py-2 text-xs"></p>
+        <button
+          type="submit"
+          class="mt-1 cursor-pointer self-start rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+        >
+          更新密码
+        </button>
+      </form>
+    </section>
+
+    <section class="mt-4 rounded-2xl border border-border/60 bg-card/60 p-5">
+      <h2 class="mb-1 text-sm font-bold">快捷导航配置（指纹菜单）</h2>
+      <p class="mb-4 text-xs text-foreground/45">
+        首页顶栏指纹图标弹出的快捷导航（如云盘、相册），保存后前台点击时即时生效。
+      </p>
+      <div id="links-rows" class="flex flex-col gap-2"></div>
+      <div class="mt-3 flex items-center gap-3">
+        <button
+          id="add-link"
+          type="button"
+          class="cursor-pointer rounded-xl border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:border-accent/40 hover:text-accent"
+        >
+          + 添加一项
+        </button>
+        <button
+          id="save-links"
+          type="button"
+          class="cursor-pointer rounded-xl bg-accent px-4 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+        >
+          保存导航
+        </button>
+        <span id="links-status" class="hidden rounded-lg px-3 py-1.5 text-xs"></span>
+      </div>
+    </section>
+
+    <section class="mt-4 rounded-2xl border border-border/60 bg-card/60 p-5">
+      <h2 class="mb-2 text-sm font-bold">关于本后台</h2>
+      <ul class="flex flex-col gap-2 text-xs leading-relaxed text-foreground/55">
+        <li>· 前台保持纯静态输出，仅 <code class="font-firacode">/admin</code> 与 <code class="font-firacode">/api/admin/*</code> 走 Node 服务端按需渲染（@astrojs/node，standalone 模式）。</li>
+        <li>· 文章即 <code class="font-firacode">src/data/blog/*.md</code>，后台的增删改直接读写这些文件；开发模式下前台即时热更新，生产部署后需重新构建。</li>
+        <li>· 删除的文章移入 <code class="font-firacode">src/data/admin/trash/</code>，可手动找回。</li>
+        <li>· 会话凭据为 HttpOnly Cookie（HMAC 签名，7 天有效），密钥自动生成于 <code class="font-firacode">src/data/admin/secret.key</code>，也可用环境变量 <code class="font-firacode">ADMIN_SECRET</code> 固定。</li>
+        <li>· 灵感来自《近期开发的四个开源项目》中 hubProxy / Artalk 的后台设计：仪表盘、日志、设置集中管理。</li>
+      </ul>
+    </section>
+  </div>
+</AdminLayout>
+
+<script>
+  document.getElementById("password-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const status = document.getElementById("password-status");
+    const data = new FormData(form);
+    const response = await fetch("/api/admin/password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        oldPassword: data.get("oldPassword"),
+        newPassword: data.get("newPassword"),
+      }),
+    });
+    const result = await response.json();
+    if (status) {
+      status.textContent = result.ok ? "✓ 密码已更新，下次登录生效" : (result.message ?? "修改失败");
+      status.classList.remove("hidden");
+      status.className = `rounded-lg px-3 py-2 text-xs ${result.ok ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-500"}`;
+    }
+    if (result.ok) form.reset();
+  });
+
+  /* ── Portal quick links (fingerprint menu) ─────────────────────────── */
+
+  const linksRows = document.getElementById("links-rows");
+  const linksStatus = document.getElementById("links-status");
+
+  function linkRow(name = "", url = ""): HTMLElement {
+    const row = document.createElement("div");
+    row.className = "flex items-center gap-2";
+    row.innerHTML = `
+      <input name="link-name" placeholder="名称（如：云盘）" value="${name}" class="w-32 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-accent/60" />
+      <input name="link-url" placeholder="https://…" value="${url}" class="flex-1 rounded-xl border border-border bg-background px-3 py-2 font-firacode text-sm outline-none transition-colors focus:border-accent/60" />
+      <button type="button" data-remove class="cursor-pointer rounded-lg px-2 py-1 text-xs text-red-500/70 transition-colors hover:bg-red-500/10 hover:text-red-500">删除</button>
+    `;
+    row.querySelector("[data-remove]")?.addEventListener("click", () => row.remove());
+    return row;
+  }
+
+  async function loadLinks() {
+    const res = await fetch("/api/admin/links");
+    if (res.status === 401) {
+      location.href = "/admin/login";
+      return;
+    }
+    const j = await res.json();
+    if (linksRows) {
+      linksRows.innerHTML = "";
+      (j.links ?? []).forEach((l: { name: string; url: string }) =>
+        linksRows.appendChild(linkRow(l.name, l.url)),
+      );
+    }
+  }
+
+  document.getElementById("add-link")?.addEventListener("click", () => {
+    linksRows?.appendChild(linkRow());
+  });
+
+  document.getElementById("save-links")?.addEventListener("click", async () => {
+    const names = [...(linksRows?.querySelectorAll("[name=link-name]") ?? [])] as HTMLInputElement[];
+    const urls = [...(linksRows?.querySelectorAll("[name=link-url]") ?? [])] as HTMLInputElement[];
+    const links = names
+      .map((n, i) => ({ name: n.value.trim(), url: (urls[i]?.value ?? "").trim() }))
+      .filter(l => l.name && l.url);
+    const res = await fetch("/api/admin/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ links }),
+    });
+    const j = await res.json();
+    if (linksStatus) {
+      linksStatus.textContent = j.ok ? "✓ 已保存，前台点击指纹图标即可看到" : (j.error ?? "保存失败");
+      linksStatus.classList.remove("hidden");
+      linksStatus.className = `rounded-lg px-3 py-1.5 text-xs ${j.ok ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-500"}`;
+      window.setTimeout(() => linksStatus.classList.add("hidden"), 3000);
+    }
+  });
+
+  loadLinks();
+</script>

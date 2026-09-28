@@ -1,0 +1,166 @@
+---
+/**
+ * ConsolePanel — top-right console button that pops a panel with site
+ * stats, a tag cloud and the latest comments.
+ */
+import { getCollection } from "astro:content";
+
+const posts = await getCollection("blog");
+const tagMap = new Map<string, number>();
+for (const post of posts) {
+  for (const tag of post.data.tags ?? []) {
+    tagMap.set(tag, (tagMap.get(tag) ?? 0) + 1);
+  }
+}
+const tags = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+---
+
+<div class="console-wrap" data-console-wrap>
+  <button type="button" class="console-btn" data-console-btn aria-label="打开控制台" title="控制台">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="4 17 10 11 4 5"></polyline>
+      <line x1="12" y1="19" x2="20" y2="19"></line>
+    </svg>
+  </button>
+
+  <div class="console-panel" data-console-panel hidden>
+    <p class="console-heading">控制台</p>
+
+    <div class="console-stats">
+      <div class="console-stat">
+        <span class="console-stat-num">{posts.length}</span>
+        <span class="console-stat-label">文章</span>
+      </div>
+      <div class="console-stat">
+        <span class="console-stat-num">{tagMap.size}</span>
+        <span class="console-stat-label">标签</span>
+      </div>
+      <div class="console-stat">
+        <span class="console-stat-num" data-console-comment-count>0</span>
+        <span class="console-stat-label">评论</span>
+      </div>
+    </div>
+
+    <div class="console-tags">
+      {tags.map(([tag, n]) => (
+        <a class="console-tag" href={`/tags/${tag}/`}>{tag}<sup>{n}</sup></a>
+      ))}
+    </div>
+
+    <p class="console-sub">最近评论</p>
+    <ul class="console-comments" data-console-comments>
+      <li class="console-empty">暂无评论</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  function initConsole() {
+    document.querySelectorAll("[data-console-wrap]").forEach(wrap => {
+      if ((wrap as HTMLElement).dataset.init) return;
+      (wrap as HTMLElement).dataset.init = "1";
+      const btn = wrap.querySelector("[data-console-btn]") as HTMLElement;
+      const panel = wrap.querySelector("[data-console-panel]") as HTMLElement;
+      const list = wrap.querySelector("[data-console-comments]") as HTMLElement;
+      const countEl = wrap.querySelector("[data-console-comment-count]") as HTMLElement;
+
+      btn.addEventListener("click", async e => {
+        e.stopPropagation();
+        const willOpen = panel.hidden;
+        panel.hidden = !willOpen;
+        if (willOpen && (list as HTMLElement).dataset.loaded !== "1") {
+          try {
+            const res = await fetch("/api/comments/recent");
+            const j = await res.json();
+            const comments = j.comments ?? [];
+            countEl.textContent = String(comments.length > 0 ? `8+`.slice(0, comments.length >= 8 ? 2 : 1) : "0");
+            // precise count endpoint is admin-only; show "N" of what we know
+            countEl.textContent = comments.length >= 8 ? "8+" : String(comments.length);
+            list.innerHTML = comments.length
+              ? comments
+                  .map(
+                    (c: any) => `
+                    <li class="console-comment">
+                      <span class="console-comment-name">${c.name}</span>
+                      <span class="console-comment-text">${c.content.slice(0, 42)}${c.content.length > 42 ? "…" : ""}</span>
+                    </li>`,
+                  )
+                  .join("")
+              : `<li class="console-empty">暂无评论</li>`;
+            (list as HTMLElement).dataset.loaded = "1";
+          } catch {
+            list.innerHTML = `<li class="console-empty">加载失败</li>`;
+          }
+        }
+      });
+
+      document.addEventListener("click", e => {
+        if (!panel.hidden && !wrap.contains(e.target as Node)) panel.hidden = true;
+      });
+      document.addEventListener("keydown", e => {
+        if (e.key === "Escape") panel.hidden = true;
+      });
+    });
+  }
+  initConsole();
+  document.addEventListener("astro:page-load", initConsole);
+</script>
+
+<style>
+  @reference "../styles/global.css";
+
+  .console-wrap {
+    @apply relative flex items-center;
+  }
+  .console-btn {
+    @apply inline-flex size-9 items-center justify-center rounded-full text-foreground/60 transition-all duration-300 hover:bg-accent/10 hover:text-accent;
+  }
+  .console-btn svg {
+    @apply size-5;
+  }
+  .console-panel {
+    @apply absolute top-12 right-0 z-50 w-72 rounded-2xl border border-border/20 bg-background/95 p-4 shadow-xl shadow-foreground/10 backdrop-blur-md;
+  }
+  .console-heading {
+    @apply font-firacode text-[10px] tracking-widest text-foreground/40 uppercase select-none;
+  }
+  .console-stats {
+    @apply mt-2 grid grid-cols-3 gap-2;
+  }
+  .console-stat {
+    @apply flex flex-col items-center rounded-xl bg-muted/20 py-2;
+  }
+  .console-stat-num {
+    @apply font-firacode text-base font-bold text-accent;
+  }
+  .console-stat-label {
+    @apply text-[10px] text-foreground/45;
+  }
+  .console-tags {
+    @apply mt-3 flex flex-wrap gap-1.5;
+  }
+  .console-tag {
+    @apply rounded-full border border-border/20 px-2.5 py-1 text-[11px] text-foreground/65 no-underline transition-colors hover:border-accent/40 hover:bg-accent/10 hover:text-accent;
+  }
+  .console-tag sup {
+    @apply ml-0.5 text-[9px] text-accent/70;
+  }
+  .console-sub {
+    @apply mt-3 mb-1 font-firacode text-[10px] tracking-widest text-foreground/40 uppercase select-none;
+  }
+  .console-comments {
+    @apply m-0 flex max-h-40 list-none flex-col gap-1.5 overflow-y-auto p-0;
+  }
+  .console-comment {
+    @apply flex flex-col rounded-lg bg-muted/15 px-2.5 py-1.5;
+  }
+  .console-comment-name {
+    @apply text-[11px] font-semibold text-foreground/75;
+  }
+  .console-comment-text {
+    @apply text-[11px] text-foreground/50;
+  }
+  .console-empty {
+    @apply py-1 text-xs text-foreground/35;
+  }
+</style>

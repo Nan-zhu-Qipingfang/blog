@@ -1,0 +1,127 @@
+---
+export const prerender = false;
+
+import "@/styles/global.css";
+import { isAuthed } from "@/utils/adminAuth";
+
+if (await isAuthed(Astro.cookies)) {
+  return Astro.redirect("/admin");
+}
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>登录 · 清羽后台</title>
+    <script is:inline>
+      (function () {
+        const saved = localStorage.getItem("theme");
+        const theme =
+          saved ||
+          (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.firstElementChild?.setAttribute("data-theme", theme);
+      })();
+    </script>
+  </head>
+  <body class="flex min-h-dvh items-center justify-center bg-background p-4 text-foreground antialiased">
+    <div
+      class="pointer-events-none fixed inset-0 opacity-70"
+      style="background: radial-gradient(600px 400px at 50% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);"
+      aria-hidden="true"
+    >
+    </div>
+
+    <main class="relative w-full max-w-sm">
+      <div class="rounded-3xl border border-border/70 bg-card/60 p-8 shadow-xl shadow-black/5 backdrop-blur">
+        <div class="mb-6 text-center">
+          <span
+            class="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-accent/15 font-firacode text-base font-bold text-accent"
+          >
+            LS
+          </span>
+          <h1 class="text-lg font-bold">清羽后台</h1>
+          <p class="mt-1 text-xs text-foreground/50">Nanzhu's Blog 管理入口</p>
+        </div>
+
+        <form id="login-form" class="flex flex-col gap-3">
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-foreground/60">账号</span>
+            <input
+              name="username"
+              type="text"
+              value="admin"
+              autocomplete="username"
+              required
+              class="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-foreground/60">密码</span>
+            <input
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+              class="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60"
+            />
+          </label>
+
+          <p id="login-error" class="hidden rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500"></p>
+
+          <button
+            type="submit"
+            class="mt-1 cursor-pointer rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+          >
+            登录后台
+          </button>
+        </form>
+
+        <p class="mt-5 rounded-xl border border-border/50 bg-background/60 px-3.5 py-2.5 text-center text-[11px] leading-relaxed text-foreground/45">
+          本地演示默认账号 <code class="font-firacode text-accent/80">admin</code> · 密码
+          <code class="font-firacode text-accent/80">admin12346</code>（最后没有 5）<br />
+          可在登录后的「设置」页修改密码
+        </p>
+      </div>
+    </main>
+
+    <script>
+      document.getElementById("login-form")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const form = event.currentTarget as HTMLFormElement;
+        const errorEl = document.getElementById("login-error");
+        const button = form.querySelector<HTMLButtonElement>("button[type=submit]");
+        if (button) button.disabled = true;
+        try {
+          const data = new FormData(form);
+          const response = await fetch("/api/admin/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: data.get("username"),
+              password: data.get("password"),
+            }),
+          });
+          const result = await response.json();
+          if (result.ok) {
+            location.href = "/admin";
+          } else {
+            if (errorEl) {
+              errorEl.textContent = result.message ?? "登录失败";
+              errorEl.classList.remove("hidden");
+            }
+          }
+        } catch {
+          if (errorEl) {
+            errorEl.textContent = "网络错误，请重试";
+            errorEl.classList.remove("hidden");
+          }
+        } finally {
+          if (button) button.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

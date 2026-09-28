@@ -1,0 +1,82 @@
+---
+import { getCollection } from "astro:content";
+import type { GetStaticPathsOptions } from "astro";
+import Main from "@/layouts/Main.astro";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Card from "@/components/Card.astro";
+import Pagination from "@/components/Pagination.astro";
+import getUniqueTags from "@/utils/getUniqueTags";
+import getPostsByTag from "@/utils/getPostsByTag";
+import { SITE } from "@/config";
+
+export async function getStaticPaths({ paginate }: GetStaticPathsOptions) {
+  const [blogPosts, galleryPosts] = await Promise.all([
+    getCollection("blog"),
+    SITE.showGalleries && SITE.showGalleriesInIndex
+      ? getCollection("galleries")
+      : Promise.resolve([]),
+  ]);
+  const posts = [...blogPosts, ...galleryPosts];
+  const tags = getUniqueTags(posts);
+
+  return tags.flatMap(({ tag, tagName }) => {
+    const tagPosts = getPostsByTag(posts, tag);
+
+    return paginate(tagPosts, {
+      params: { tag },
+      props: { tagName },
+      pageSize: SITE.postPerPage,
+    });
+  });
+}
+
+const params = Astro.params;
+const { tag } = params;
+const { page, tagName } = Astro.props;
+
+const tagOgImage = `/tags/${tag}/og.png`;
+
+// Prevent duplicate metadata in tag pagination pages
+const metaTitle = page.currentPage > 1
+  ? `标签：${tagName} (第 ${page.currentPage} 页 / 共 ${page.lastPage} 页) | ${SITE.title}`
+  : `标签：${tagName} | ${SITE.title}`;
+
+const tagDescription = page.currentPage > 1
+  ? `${SITE.title} 中标记为「${tagName}」的全部文章（第 ${page.currentPage} 页 / 共 ${page.lastPage} 页）。`
+  : `${SITE.title} 中标记为「${tagName}」的全部文章。`;
+
+const prevURL = page.url.prev ? new URL(page.url.prev, SITE.website).toString() : undefined;
+const nextURL = page.url.next ? new URL(page.url.next, SITE.website).toString() : undefined;
+---
+
+<Layout
+  title={metaTitle}
+  description={tagDescription}
+  ogImage={tagOgImage}
+  prev={prevURL}
+  next={nextURL}
+>
+  <Header />
+  <Main
+    pageTitle={[`标签：`, `${tagName}`]}
+    titleTransition={tag}
+    pageDesc={`标记为「${tagName}」的全部文章。`}
+  >
+    <ul>
+      {page.data.map((data, index) => (
+        <Card
+          {...data}
+          loading={index < 3 ? "eager" : "lazy"}
+          fetchpriority={index < 3 ? "high" : "auto"}
+        />
+      ))}
+    </ul>
+  </Main>
+
+  <Pagination {page} />
+
+  <Footer noMarginTop={page.lastPage > 1} />
+</Layout>
+

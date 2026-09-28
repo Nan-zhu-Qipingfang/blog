@@ -1,0 +1,279 @@
+---
+// Home page right sidebar — imitates the reference blog's welcome & webinfo cards.
+// Stats are computed at build/dev time from the local collections (no external
+// services needed); the patron/traffic cards on the live site require real
+// data sources and are intentionally omitted.
+import { getCollection } from "astro:content";
+
+const posts = await getCollection("blog");
+const postCount = posts.length;
+
+const totalChars = posts.reduce(
+  (sum, post) => sum + (post.body ? post.body.replace(/\s/g, "").length : 0),
+  0
+);
+
+const lastUpdateMs = posts.reduce((latest, post) => {
+  const t = (post.data.modDatetime ?? post.data.pubDatetime)?.getTime() ?? 0;
+  return Math.max(latest, t);
+}, 0);
+
+const formatNumber = (n: number) => n.toLocaleString("en-US");
+---
+
+<aside class="hidden w-[300px] shrink-0 lg:block">
+  <div class="flex flex-col gap-4">
+    <!-- ══════════ 欢迎来访者 ══════════ -->
+    <div class="sidebar-card card-glow p-4">
+      <div class="card-glow-effect" aria-hidden="true"></div>
+      <div class="relative z-5">
+        <h3 class="mb-3 flex items-center gap-2 text-[1.125rem] font-bold tracking-wide text-foreground">
+          <svg class="size-4 text-accent/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
+          </svg>
+          欢迎来访者
+        </h3>
+        <div class="welcome-copy">
+          <p>我是清扬，一个 <strong>热爱编程</strong> 的技术爱好者，喜欢记录折腾过程，也喜欢把踩过的坑写成路标。</p>
+        </div>
+        <div class="welcome-info" data-welcome-info aria-live="polite">
+          <div class="welcome-loading">
+            <svg class="size-5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11z" />
+              <circle cx="12" cy="10" r="2.5" />
+            </svg>
+            <span>正在辨认风从哪里来...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ 网站信息 ══════════ -->
+    <div class="sidebar-card card-glow p-4">
+      <div class="card-glow-effect" aria-hidden="true"></div>
+      <div class="relative z-5">
+        <h3 class="mb-3 flex items-center gap-2 text-[1.125rem] font-bold tracking-wide text-foreground">
+          <svg class="size-4 text-accent/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 17l5-5 4 4 8-8" />
+            <path d="M14 8h6v6" />
+          </svg>
+          网站信息
+        </h3>
+        <dl class="webinfo-list">
+          <div>
+            <dt>文章数目</dt>
+            <dd class="font-firacode">{postCount}</dd>
+          </div>
+          <div>
+            <dt>本站总字数</dt>
+            <dd class="font-firacode">{formatNumber(totalChars)}</dd>
+          </div>
+          <div>
+            <dt>最后更新时间</dt>
+            <dd class="font-firacode" data-build-timestamp={lastUpdateMs}>刚刚</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<style>
+  /* ── Card shell (matches live .app-card look) ── */
+  .sidebar-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid color-mix(in srgb, var(--border) 25%, transparent);
+    background: color-mix(in srgb, var(--muted) 10%, transparent);
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.3s ease,
+      transform 0.3s ease;
+  }
+
+  .sidebar-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+    box-shadow: 0 8px 30px -12px color-mix(in srgb, var(--accent) 25%, transparent);
+    transform: translateY(-2px);
+  }
+
+  .card-glow-effect {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: radial-gradient(
+      320px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+      color-mix(in oklab, var(--accent) 9%, transparent) 0%,
+      color-mix(in oklab, var(--accent) 4%, transparent) 35%,
+      transparent 75%
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .sidebar-card:hover .card-glow-effect {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar-card,
+    .sidebar-card:hover {
+      transform: none;
+      transition: none;
+    }
+    .card-glow-effect {
+      display: none;
+    }
+  }
+
+  /* ── Welcome card (copied from live styling) ── */
+  .welcome-copy {
+    display: grid;
+    gap: 0.55rem;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    font-size: 0.9375rem;
+    line-height: 1.7;
+  }
+
+  .welcome-copy strong,
+  .welcome-copy a {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .welcome-copy a {
+    text-underline-offset: 0.16em;
+    text-decoration: underline;
+  }
+
+  .welcome-info {
+    margin-top: 0.85rem;
+    padding: 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--border) 18%, transparent);
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--background) 55%, transparent);
+    color: color-mix(in srgb, var(--foreground) 68%, transparent);
+    text-align: center;
+    font-size: 0.9375rem;
+    line-height: 1.75;
+  }
+
+  .welcome-info p + p {
+    margin-top: 0.35rem;
+  }
+
+  .welcome-info strong {
+    color: var(--accent);
+    font-family: var(--font-firacode), monospace;
+  }
+
+  .welcome-greeting {
+    color: color-mix(in srgb, var(--foreground) 74%, transparent);
+    font-weight: 650;
+  }
+
+  .welcome-loading {
+    display: grid;
+    place-items: center;
+    gap: 0.45rem;
+    min-height: 3.5rem;
+  }
+
+  .welcome-ip {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--accent);
+    font-family: var(--font-firacode), monospace;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+    white-space: nowrap;
+    filter: blur(5px);
+    transition: filter 0.25s ease;
+  }
+
+  .welcome-ip:hover,
+  .welcome-ip:focus-visible {
+    filter: none;
+  }
+
+  /* ── Webinfo card ── */
+  .webinfo-list {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .webinfo-list > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.48rem;
+    border-bottom: 1px dashed color-mix(in srgb, var(--border) 18%, transparent);
+  }
+
+  .webinfo-list > div:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .webinfo-list dt {
+    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+    font-size: 0.9375rem;
+  }
+
+  .webinfo-list dd {
+    margin: 0;
+    color: var(--accent);
+    font-weight: 800;
+    font-size: 0.9375rem;
+    white-space: nowrap;
+  }
+</style>
+
+<script>
+  document.addEventListener("astro:page-load", () => {
+    // ── Welcome greeting (fake offline IP, mirrors live blur interaction) ──
+    const welcomeInfo = document.querySelector<HTMLElement>("[data-welcome-info]");
+    if (welcomeInfo && !welcomeInfo.dataset.ready) {
+      welcomeInfo.dataset.ready = "true";
+      window.setTimeout(() => {
+        const hour = new Date().getHours();
+        const greeting =
+          hour < 6 ? "夜深了" :
+          hour < 9 ? "早上好" :
+          hour < 12 ? "上午好" :
+          hour < 14 ? "中午好" :
+          hour < 18 ? "下午好" :
+          hour < 23 ? "晚上好" : "夜深了";
+
+        welcomeInfo.innerHTML = `
+          <p class="welcome-greeting">${greeting}，来自远方的访客！</p>
+          <p>你的 IP：<span class="welcome-ip" title="鼠标悬停查看">127.0.0.1</span></p>
+        `;
+      }, 900);
+    }
+
+    // ── Relative "last updated" time ──
+    document.querySelectorAll<HTMLElement>("[data-build-timestamp]").forEach(el => {
+      const ts = Number(el.dataset.buildTimestamp);
+      if (!ts) return;
+      const diff = Date.now() - ts;
+      const minutes = Math.floor(diff / 60000);
+      let text: string;
+      if (minutes < 1) text = "刚刚";
+      else if (minutes < 60) text = `${minutes} 分钟前`;
+      else if (minutes < 60 * 24) text = `${Math.floor(minutes / 60)} 小时前`;
+      else if (minutes < 60 * 24 * 30) text = `${Math.floor(minutes / (60 * 24))} 天前`;
+      else
+        text = new Date(ts).toLocaleDateString("zh-CN", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+      el.textContent = text;
+    });
+  });
+</script>

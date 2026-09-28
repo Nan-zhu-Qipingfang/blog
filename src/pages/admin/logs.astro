@@ -1,0 +1,101 @@
+---
+export const prerender = false;
+
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { isAuthed } from "@/utils/adminAuth";
+
+// Server-side guard (Astro.redirect only works at page level)
+if (!(await isAuthed(Astro.cookies))) {
+  return Astro.redirect("/admin/login");
+}
+---
+
+<AdminLayout>
+  <div class="mx-auto max-w-4xl">
+    <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-extrabold">操作日志</h1>
+        <p class="mt-1 text-sm text-foreground/50">记录后台的登录、增删改操作（最多保留 200 条）</p>
+      </div>
+      <button
+        id="clear-logs"
+        type="button"
+        class="cursor-pointer rounded-xl border border-border px-4 py-2 text-sm font-medium transition-colors hover:border-red-500/40 hover:text-red-500"
+      >
+        清空日志
+      </button>
+    </header>
+
+    <div class="overflow-hidden rounded-2xl border border-border/60 bg-card/60">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-border/60 text-xs text-foreground/45">
+            <th class="px-4 py-3 font-medium">时间</th>
+            <th class="px-4 py-3 font-medium">操作</th>
+            <th class="px-4 py-3 font-medium">详情</th>
+          </tr>
+        </thead>
+        <tbody id="log-rows"></tbody>
+      </table>
+      <p id="empty-tip" class="hidden px-4 py-10 text-center text-sm text-foreground/40">
+        还没有操作记录
+      </p>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  const actionColor: Record<string, string> = {
+    登录: "text-sky-500",
+    登出: "text-foreground/50",
+    新建文章: "text-green-500",
+    更新文章: "text-amber-500",
+    删除文章: "text-red-500",
+    修改密码: "text-purple-500",
+  };
+
+  function escapeHtml(text: string): string {
+    return text
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  }
+
+  async function loadLogs() {
+    const response = await fetch("/api/admin/logs");
+    if (response.status === 401) {
+      location.href = "/admin/login";
+      return;
+    }
+    const result = await response.json();
+    const logs: { time: string; action: string; detail: string }[] = result.logs ?? [];
+    const rows = document.getElementById("log-rows");
+    if (!rows) return;
+    rows.innerHTML = "";
+    for (const log of logs) {
+      const date = new Date(log.time);
+      const timeText = Number.isNaN(date.getTime())
+        ? "—"
+        : date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const tr = document.createElement("tr");
+      tr.className = "border-b border-border/30 last:border-0";
+      tr.innerHTML = `
+        <td class="whitespace-nowrap px-4 py-2.5 font-firacode text-xs text-foreground/50">${timeText}</td>
+        <td class="whitespace-nowrap px-4 py-2.5 text-xs font-semibold ${actionColor[log.action] ?? "text-foreground/70"}">${escapeHtml(log.action)}</td>
+        <td class="px-4 py-2.5 text-xs text-foreground/65">${escapeHtml(log.detail)}</td>
+      `;
+      rows.appendChild(tr);
+    }
+    const empty = document.getElementById("empty-tip");
+    if (empty) empty.classList.toggle("hidden", logs.length > 0);
+  }
+
+  document.getElementById("clear-logs")?.addEventListener("click", async () => {
+    if (!confirm("确定清空全部操作日志吗？")) return;
+    await fetch("/api/admin/logs", { method: "DELETE" });
+    loadLogs();
+  });
+
+  loadLogs();
+</script>

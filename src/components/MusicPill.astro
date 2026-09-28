@@ -1,0 +1,374 @@
+---
+/**
+ * MusicPill — floating player pill (bottom-left, offset from the edge).
+ * Random hot song from a free public API (proxied server-side to skip CORS),
+ * scrolling current-lyric line, prev/pause/next/shuffle controls and a
+ * right-click menu (prev / next / copy title).
+ */
+---
+<div class="music-pill" data-music-pill>
+  <img class="music-cover" data-music-cover alt="" aria-hidden="true" hidden />
+  <span class="music-cover music-cover--fallback" data-music-fallback>
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg>
+  </span>
+  <div class="music-info">
+    <span class="music-name" data-music-name>随机热歌</span>
+    <span class="music-lyric" data-music-lyric>点 ▶ 换首歌唱唱</span>
+  </div>
+  <div class="music-ctrls">
+    <button type="button" class="music-btn" data-music-prev aria-label="上一首" title="上一首">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+    </button>
+    <button type="button" class="music-btn music-btn--main" data-music-toggle aria-label="播放" title="播放 / 暂停">
+      <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" hidden><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+    </button>
+    <button type="button" class="music-btn" data-music-next aria-label="下一首" title="下一首">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
+    </button>
+    <button type="button" class="music-btn" data-music-rand aria-label="随机换歌" title="随机换歌">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="music-menu" data-music-menu hidden>
+  <button type="button" data-menu-prev>上一首</button>
+  <button type="button" data-menu-next>下一首</button>
+  <button type="button" data-menu-copy>复制歌名</button>
+</div>
+
+<script>
+  function initMusicPill() {
+    if (document.querySelector("[data-music-audio]")) return;
+    if (document.querySelector("[data-music-pill]")) {
+      // audio element is created once per full page load; view transitions
+      // keep the DOM — only bind once by marking the body
+      if ((document.body as any).dataset.musicInit) return;
+      (document.body as any).dataset.musicInit = "1";
+    } else {
+      return;
+    }
+
+    const root = document.querySelector("[data-music-pill]") as HTMLElement;
+    const menu = document.querySelector("[data-music-menu]") as HTMLElement;
+    const audio = document.createElement("audio");
+    audio.preload = "none";
+    audio.dataset.musicAudio = "1";
+    root.appendChild(audio);
+
+    const coverImg = root.querySelector("[data-music-cover]") as HTMLImageElement;
+    const coverFallback = root.querySelector("[data-music-fallback]") as HTMLElement;
+    const nameEl = root.querySelector("[data-music-name]") as HTMLElement;
+    const lyricEl = root.querySelector("[data-music-lyric]") as HTMLElement;
+    const btnToggle = root.querySelector("[data-music-toggle]") as HTMLElement;
+    const iconPlay = btnToggle.querySelector(".icon-play") as SVGElement;
+    const iconPause = btnToggle.querySelector(".icon-pause") as SVGElement;
+
+    type Song = { name: string; artist: string; url: string; pic: string; lrc: string; lines: { t: number; text: string }[] };
+    let song: Song | null = null;
+    let loading = false;
+    let lrcTimer = 0;
+
+    function parseLrc(lrc: string) {
+      const lines: { t: number; text: string }[] = [];
+      for (const raw of (lrc || "").split("\n")) {
+        const m = raw.match(/\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\](.*)$/);
+        if (m) {
+          const t = parseInt(m[1], 10) * 60 + parseInt(m[2], 10) + (m[3] ? parseInt(m[3], 10) / (10 ** m[3].length) : 0);
+          const text = m[4].trim();
+          if (text) lines.push({ t, text });
+        }
+      }
+      return lines.sort((a, b) => a.t - b.t);
+    }
+
+    function setStatus(text: string) {
+      lyricEl.textContent = text;
+      nameEl.textContent = song ? `${song.name}${song.artist ? " · " + song.artist : ""}` : "随机热歌";
+    }
+
+    function render() {
+      if (!song) return;
+      nameEl.textContent = `${song.name}${song.artist ? " · " + song.artist : ""}`;
+      if (song.pic) {
+        coverImg.src = song.pic;
+        coverImg.hidden = false;
+        coverFallback.hidden = true;
+      } else {
+        coverImg.hidden = true;
+        coverFallback.hidden = false;
+      }
+    }
+
+    async function loadSong(autoplay: boolean) {
+      if (loading) return;
+      loading = true;
+      audio.pause();
+      lyricEl.textContent = "换歌中…";
+      try {
+        const res = await fetch("/api/music/random");
+        const j = await res.json();
+        if (!j.ok) throw new Error(j.error || "unavailable");
+        song = { ...j, lines: parseLrc(j.lrc || "") };
+        render();
+        audio.src = song.url;
+        if (autoplay) {
+          try {
+            await audio.play();
+          } catch {
+            /* autoplay policy — user pressed the button so this rarely fails */
+          }
+        }
+      } catch {
+        song = null;
+        nameEl.textContent = "随机热歌";
+        lyricEl.textContent = "音乐服务打盹了，再点一次试试";
+      } finally {
+        loading = false;
+      }
+    }
+
+    function setPlayingUI(playing: boolean) {
+      iconPlay.hidden = playing;
+      iconPause.hidden = !playing;
+      root.classList.toggle("is-playing", playing);
+    }
+
+    function currentLyricLine(): string {
+      if (!song || !song.lines.length) return song ? "♪ ♫ ♪" : "";
+      const t = audio.currentTime || 0;
+      let text = song.lines[0].text;
+      for (const line of song.lines) {
+        if (line.t <= t) text = line.text;
+        else break;
+      }
+      return text;
+    }
+
+    function startLyricLoop() {
+      stopLyricLoop();
+      lrcTimer = window.setInterval(() => {
+        const text = currentLyricLine();
+        if (text && lyricEl.textContent !== text) {
+          lyricEl.textContent = text;
+          lyricEl.classList.remove("lyric-flip");
+          void lyricEl.offsetWidth; // restart animation
+          lyricEl.classList.add("lyric-flip");
+        }
+      }, 400);
+    }
+    function stopLyricLoop() {
+      if (lrcTimer) window.clearInterval(lrcTimer);
+      lrcTimer = 0;
+    }
+
+    async function toggle() {
+      if (!song) { await loadSong(true); startLyricLoop(); return; }
+      if (audio.paused) {
+        try { await audio.play(); } catch { /* ignore */ }
+      } else {
+        audio.pause();
+      }
+    }
+
+    btnToggle.addEventListener("click", toggle);
+    root.querySelector("[data-music-prev]")?.addEventListener("click", () => { loadSong(true); startLyricLoop(); });
+    root.querySelector("[data-music-next]")?.addEventListener("click", () => { loadSong(true); startLyricLoop(); });
+    root.querySelector("[data-music-rand]")?.addEventListener("click", () => { loadSong(true); startLyricLoop(); });
+
+    audio.addEventListener("play", () => setPlayingUI(true));
+    audio.addEventListener("pause", () => setPlayingUI(false));
+    audio.addEventListener("ended", () => { loadSong(true); startLyricLoop(); });
+    audio.addEventListener("error", () => {
+      if (song) { lyricEl.textContent = "这首歌跑丢了，换一首…"; window.setTimeout(() => loadSong(true), 800); }
+    });
+
+    // right-click menu on the pill
+    root.addEventListener("contextmenu", e => {
+      e.preventDefault();
+      menu.hidden = false;
+      const mw = menu.offsetWidth, mh = menu.offsetHeight;
+      menu.style.left = `${Math.min(e.clientX, window.innerWidth - mw - 8)}px`;
+      menu.style.top = `${Math.max(8, e.clientY - mh - 8)}px`;
+    });
+    const closeMenu = () => (menu.hidden = true);
+    document.addEventListener("click", closeMenu);
+    document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
+    menu.querySelector("[data-menu-prev]")?.addEventListener("click", () => { loadSong(true); startLyricLoop(); });
+    menu.querySelector("[data-menu-next]")?.addEventListener("click", () => { loadSong(true); startLyricLoop(); });
+    menu.querySelector("[data-menu-copy]")?.addEventListener("click", async () => {
+      if (song) {
+        try { await navigator.clipboard.writeText(`${song.name} - ${song.artist}`.replace(/ - $/, "")); } catch { /* ignore */ }
+        const label = menu.querySelector("[data-menu-copy]") as HTMLElement;
+        const old = label.textContent;
+        label.textContent = "已复制 ✓";
+        window.setTimeout(() => (label.textContent = old), 1200);
+      }
+    });
+  }
+  initMusicPill();
+</script>
+
+<style>
+  .music-pill {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 1.5rem;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    max-width: min(92vw, 420px);
+    padding: 0.4rem 0.55rem 0.4rem 0.45rem;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, #4f9cf9 0%, #2563eb 55%, #1d4ed8 100%);
+    box-shadow:
+      0 10px 30px -6px rgba(37, 99, 235, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    color: #fff;
+    user-select: none;
+  }
+
+  .music-cover {
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 9999px;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+  }
+
+  .music-cover--fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .music-cover--fallback svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .is-playing .music-cover--fallback {
+    animation: music-note-bounce 1.6s ease-in-out infinite;
+  }
+
+  @keyframes music-note-bounce {
+    0%, 100% { transform: rotate(-8deg) scale(1); }
+    50% { transform: rotate(8deg) scale(1.08); }
+  }
+
+  .music-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-width: 11rem;
+    line-height: 1.25;
+  }
+
+  .music-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  }
+
+  .music-lyric {
+    font-size: 0.66rem;
+    color: rgba(255, 255, 255, 0.82);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .lyric-flip {
+    animation: lyric-in 0.35s ease;
+  }
+
+  @keyframes lyric-in {
+    from { opacity: 0.2; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .music-ctrls {
+    display: flex;
+    align-items: center;
+    gap: 0.1rem;
+    flex-shrink: 0;
+    margin-left: 0.15rem;
+  }
+
+  .music-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.7rem;
+    height: 1.7rem;
+    border: none;
+    border-radius: 9999px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.88);
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.15s ease;
+  }
+
+  .music-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .music-btn:active {
+    transform: scale(0.92);
+  }
+
+  .music-btn svg {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+
+  .music-btn--main {
+    width: 2rem;
+    height: 2rem;
+    background: rgba(255, 255, 255, 0.22);
+  }
+
+  .music-btn--main svg {
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+
+  .music-menu {
+    position: fixed;
+    z-index: 95;
+    min-width: 8rem;
+    padding: 0.3rem;
+    border-radius: 0.9rem;
+    border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+    background: color-mix(in srgb, var(--background) 92%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .music-menu button {
+    border: none;
+    background: transparent;
+    text-align: start;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.8rem;
+    color: var(--foreground);
+    border-radius: 0.6rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .music-menu button:hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+  }
+</style>

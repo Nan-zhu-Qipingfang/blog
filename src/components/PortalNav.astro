@@ -1,0 +1,324 @@
+---
+/**
+ * PortalNav — fingerprint button hugging the logo; opens a compact popup
+ * with quick links (云盘/相册/…) configured in the admin panel.
+ *
+ * Layout: a horizontal app-style grid (icon chip + label), one recognisable
+ * icon per link, matched from the link name.
+ */
+---
+<div class="portal-nav" data-portal-nav>
+  <button
+    type="button"
+    class="portal-btn"
+    data-portal-btn
+    aria-label="快捷导航"
+    title="快捷导航"
+  >
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <defs>
+        <linearGradient
+          id="fpGrad"
+          x1="4"
+          y1="3"
+          x2="20"
+          y2="21"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop class="fp-stop-main" offset="0%"></stop>
+          <stop class="fp-stop-accent" offset="52%"></stop>
+          <stop class="fp-stop-main" offset="100%"></stop>
+        </linearGradient>
+
+        <!-- Concentric ridge arcs: a denser, higher-fidelity fingerprint -->
+        <g id="fpLines" fill="none">
+          <path d="M10.3 13.7a1.7 2.2 0 0 1 3.4 0c0 1.5-.25 3-.6 4.2"></path>
+          <path d="M8.8 13.7a3.2 4.2 0 0 1 6.4 0c0 1.3-.15 2.6-.35 3.7"></path>
+          <path d="M7.3 13.7a4.7 6.1 0 0 1 9.4 0c0 1-.1 2-.2 2.9"></path>
+          <path d="M5.8 13.7a6.2 8.1 0 0 1 12.4 0c0 .8-.08 1.6-.16 2.3"></path>
+          <path d="M4.3 13.7a7.7 10 0 0 1 15.4 0v1.1"></path>
+          <path d="M4.3 14.8c.25 1.7.7 3.3 1.4 4.7"></path>
+          <path d="M19.7 14.8c-.25 1.7-.7 3.3-1.4 4.7"></path>
+          <path d="M12 12.4c0 1.1-.1 2.2-.25 3.1"></path>
+        </g>
+      </defs>
+
+      <!-- soft halo pass, then the crisp gradient pass -->
+      <use
+        href="#fpLines"
+        stroke="currentColor"
+        stroke-width="3.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        opacity="0.14"></use>
+      <use
+        href="#fpLines"
+        stroke="url(#fpGrad)"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"></use>
+    </svg>
+  </button>
+
+  <div class="portal-panel" data-portal-panel hidden>
+    <p class="portal-heading">快捷导航</p>
+    <div class="portal-grid" data-portal-list>
+      <span class="portal-loading">加载中…</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ── Icon library: one recognisable glyph + tint per link ───────────── */
+  const ICONS: Record<string, { tint: string; svg: string }> = {
+    cloud: {
+      tint: "#38bdf8",
+      svg: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+    },
+    images: {
+      tint: "#a78bfa",
+      svg: '<path d="M18 22H4a2 2 0 0 1-2-2V6"/><path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18"/><circle cx="12" cy="8" r="2"/><rect width="16" height="16" x="6" y="2" rx="2"/>',
+    },
+    house: {
+      tint: "#60a5fa",
+      svg: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    },
+    rss: {
+      tint: "#fb923c",
+      svg: '<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
+    },
+    music: {
+      tint: "#f472b6",
+      svg: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+    },
+    code: {
+      tint: "#34d399",
+      svg: '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>',
+    },
+    terminal: {
+      tint: "#2dd4bf",
+      svg: '<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>',
+    },
+    chart: {
+      tint: "#fbbf24",
+      svg: '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+    },
+    activity: {
+      tint: "#22d3ee",
+      svg: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    },
+    upload: {
+      tint: "#c084fc",
+      svg: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>',
+    },
+    mail: {
+      tint: "#94a3b8",
+      svg: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+    },
+    users: {
+      tint: "#4ade80",
+      svg: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    },
+    pen: {
+      tint: "#fb7185",
+      svg: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>',
+    },
+    book: {
+      tint: "#facc15",
+      svg: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/>',
+    },
+    star: {
+      tint: "#fcd34d",
+      svg: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.12 2.12 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.12 2.12 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.12 2.12 0 0 0-1.973 0L6.396 21.71a.53.53 0 0 1-.77-.56l.881-5.139a2.12 2.12 0 0 0-.611-1.879L2.16 9.695a.53.53 0 0 1 .294-.904l5.165-.755a2.12 2.12 0 0 0 1.597-1.16z"/>',
+    },
+    film: {
+      tint: "#818cf8",
+      svg: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M17 3v18"/><path d="M3 12h18"/>',
+    },
+    camera: {
+      tint: "#f0abfc",
+      svg: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
+    },
+    server: {
+      tint: "#38bdf8",
+      svg: '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/>',
+    },
+    file: {
+      tint: "#a3a3a3",
+      svg: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 13h6"/><path d="M9 17h6"/>',
+    },
+    github: {
+      tint: "#e2e8f0",
+      svg: '<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/>',
+    },
+    globe: {
+      tint: "#5eead4",
+      svg: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+    },
+    link: {
+      tint: "#a3a3a3",
+      svg: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    },
+  };
+
+  /* Order matters: the more specific keyword wins. */
+  const KEYWORDS: [RegExp, string][] = [
+    [/图床|上传|upload/i, "upload"],
+    [/云盘|网盘|云空间|cloud|drive|pan/i, "cloud"],
+    [/相册|图库|照片|相片|gallery|album|photo/i, "images"],
+    [/音乐|music|mp3|拾光/i, "music"],
+    [/代码|片段|snippet|code/i, "code"],
+    [/终端|命令行|terminal|shell/i, "terminal"],
+    [/博客|blog|rss|订阅/i, "rss"],
+    [/主页|首页|home|空间/i, "house"],
+    [/访客|用户|user|visitor|member/i, "users"],
+    [/统计|计数|数据|报表|analytics|stat/i, "chart"],
+    [/流量|状态|监控|status|monitor/i, "activity"],
+    [/写作|文章|笔记|随笔|提笔|post|note|write/i, "pen"],
+    [/邮件|邮箱|mail|联系/i, "mail"],
+    [/视频|影视|电影|video|film|movie/i, "film"],
+    [/相机|拍摄|camera/i, "camera"],
+    [/文档|文档库|书|阅读|book|doc/i, "book"],
+    [/收藏|星标|star|fav/i, "star"],
+    [/服务|服务器|主机|server|host/i, "server"],
+    [/文件|附件|file/i, "file"],
+    [/github/i, "github"],
+    [/网址|官网|站点|web|site/i, "globe"],
+  ];
+
+  const iconFor = (name: string) => {
+    for (const [re, key] of KEYWORDS) if (re.test(name)) return ICONS[key];
+    return ICONS.link;
+  };
+
+  const ICON_SVG = (paths: string) =>
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true">${paths}</svg>`;
+
+  function initPortalNav() {
+    document.querySelectorAll("[data-portal-nav]").forEach(nav => {
+      if ((nav as HTMLElement).dataset.init) return;
+      (nav as HTMLElement).dataset.init = "1";
+      const btn = nav.querySelector("[data-portal-btn]") as HTMLElement;
+      const panel = nav.querySelector("[data-portal-panel]") as HTMLElement;
+      const list = nav.querySelector("[data-portal-list]") as HTMLElement;
+
+      btn.addEventListener("click", async e => {
+        e.stopPropagation();
+        const willOpen = panel.hidden;
+        panel.hidden = !willOpen;
+        if (willOpen && (list as HTMLElement).dataset.loaded !== "1") {
+          try {
+            const res = await fetch("/api/portal-links");
+            const j = await res.json();
+            const links = (j.links ?? []) as { name: string; url: string }[];
+
+            list.textContent = "";
+            // keep the row balanced: 1–2 links fill the row, more wrap at 3
+            const cols = Math.min(Math.max(links.length, 1), 3);
+            list.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+
+            links.forEach(l => {
+              const a = document.createElement("a");
+              a.className = "portal-item";
+              a.href = l.url;
+              a.target = "_blank";
+              a.rel = "noopener noreferrer";
+              a.title = l.name;
+
+              const chip = document.createElement("span");
+              chip.className = "portal-icon";
+              const ic = iconFor(l.name ?? "");
+              chip.style.setProperty("--icon-tint", ic.tint);
+              chip.innerHTML = ICON_SVG(ic.svg);
+
+              const label = document.createElement("span");
+              label.className = "portal-name";
+              label.textContent = l.name ?? "";
+
+              a.append(chip, label);
+              list.appendChild(a);
+            });
+            (list as HTMLElement).dataset.loaded = "1";
+          } catch {
+            list.textContent = "";
+            const err = document.createElement("span");
+            err.className = "portal-loading";
+            err.textContent = "加载失败";
+            list.appendChild(err);
+          }
+        }
+      });
+
+      document.addEventListener("click", e => {
+        if (!panel.hidden && !nav.contains(e.target as Node)) panel.hidden = true;
+      });
+      document.addEventListener("keydown", e => {
+        if (e.key === "Escape") panel.hidden = true;
+      });
+    });
+  }
+  initPortalNav();
+  document.addEventListener("astro:page-load", initPortalNav);
+</script>
+
+<style>
+  @reference "../styles/global.css";
+
+  .portal-nav {
+    @apply relative mr-1.5 hidden sm:block;
+  }
+
+  .portal-btn {
+    @apply inline-flex size-8 items-center justify-center rounded-full text-foreground/55 transition-all duration-300 hover:bg-accent/10 hover:text-accent;
+  }
+
+  /* gradient stops can't read CSS vars from attributes — style them here */
+  .portal-btn .fp-stop-main {
+    stop-color: currentColor;
+  }
+  .portal-btn .fp-stop-accent {
+    stop-color: var(--accent);
+  }
+
+  .portal-panel {
+    @apply absolute top-10 left-0 z-50 w-56 rounded-2xl border border-border/20 bg-background/95 p-3 shadow-xl shadow-foreground/10 backdrop-blur-md;
+  }
+
+  .portal-heading {
+    @apply mb-2 px-1 font-firacode text-[10px] tracking-widest text-foreground/40 uppercase select-none;
+  }
+
+  /* horizontal app grid — icon chip on top, label underneath */
+  .portal-grid {
+    @apply grid grid-cols-3 gap-1.5;
+  }
+
+  .portal-item {
+    @apply flex flex-col items-center gap-1.5 rounded-xl px-1 py-2 no-underline transition-colors duration-200 hover:bg-accent/8;
+  }
+
+  .portal-icon {
+    @apply flex size-9 items-center justify-center rounded-[10px] transition-transform duration-300;
+    background: color-mix(in srgb, var(--icon-tint, var(--accent)) 15%, transparent);
+    color: var(--icon-tint, var(--accent));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      0 1px 2px color-mix(in srgb, var(--icon-tint, var(--accent)) 18%, transparent);
+  }
+
+  .portal-item:hover .portal-icon {
+    transform: translateY(-2px) scale(1.06);
+  }
+
+  .portal-name {
+    @apply max-w-full truncate text-[11px] leading-none text-foreground/70;
+  }
+
+  .portal-item:hover .portal-name {
+    @apply text-accent;
+  }
+
+  .portal-loading {
+    @apply px-1 py-2 text-xs text-foreground/35;
+  }
+</style>

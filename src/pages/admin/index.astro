@@ -1,0 +1,153 @@
+---
+export const prerender = false;
+
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { isAuthed } from "@/utils/adminAuth";
+
+// Server-side guard (Astro.redirect only works at page level)
+if (!(await isAuthed(Astro.cookies))) {
+  return Astro.redirect("/admin/login");
+}
+---
+
+<AdminLayout>
+  <div class="mx-auto max-w-4xl">
+    <header class="mb-6">
+      <h1 class="text-xl font-extrabold">仪表盘</h1>
+      <p class="mt-1 text-sm text-foreground/50">博客运行概况一览</p>
+    </header>
+
+    <!-- Stat cards -->
+    <section id="stats" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {
+        [
+          { id: "total", label: "文章总数", value: "—" },
+          { id: "chars", label: "本站总字数", value: "—" },
+          { id: "draft", label: "草稿箱", value: "—" },
+          { id: "tags", label: "标签数", value: "—" },
+        ].map(card => (
+          <div class="rounded-2xl border border-border/60 bg-card/60 p-4 transition-colors hover:border-accent/30">
+            <p class="text-xs text-foreground/50" data-stat-label={card.id}>
+              {card.label}
+            </p>
+            <p class="mt-1.5 font-firacode text-2xl font-bold text-accent" data-stat-value={card.id}>
+              {card.value}
+            </p>
+          </div>
+        ))
+      }
+    </section>
+
+    <!-- Monthly trend -->
+    <section class="mt-6 rounded-2xl border border-border/60 bg-card/60 p-5">
+      <h2 class="mb-4 text-sm font-bold">近 12 个月发布趋势</h2>
+      <div id="trend" class="flex h-36 items-end gap-1.5 sm:gap-2"></div>
+      <p id="trend-labels" class="mt-2 flex justify-between font-firacode text-[10px] text-foreground/40"></p>
+    </section>
+
+    <!-- Recent posts -->
+    <section class="mt-6 rounded-2xl border border-border/60 bg-card/60 p-5">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-sm font-bold">最近文章</h2>
+        <a href="/admin/posts" class="text-xs font-medium text-accent no-underline hover:underline">
+          管理全部 →
+        </a>
+      </div>
+      <ul id="recent-list" class="flex flex-col gap-1"></ul>
+    </section>
+
+    <section class="mt-6 rounded-2xl border border-border/60 bg-card/60 p-5">
+      <h2 class="mb-3 text-sm font-bold">快捷操作</h2>
+      <div class="flex flex-wrap gap-2">
+        <a href="/admin/editor" class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90">
+          ✍️ 撰写新文章
+        </a>
+        <a href="/" target="_blank" class="rounded-xl border border-border px-4 py-2 text-sm font-medium no-underline transition-colors hover:border-accent/40 hover:text-accent">
+          查看前台站点
+        </a>
+        <a href="/admin/logs" class="rounded-xl border border-border px-4 py-2 text-sm font-medium no-underline transition-colors hover:border-accent/40 hover:text-accent">
+          查看操作日志
+        </a>
+      </div>
+    </section>
+  </div>
+</AdminLayout>
+
+<script>
+  const fmt = new Intl.NumberFormat("zh-CN");
+
+  async function loadDashboard() {
+    const response = await fetch("/api/admin/stats");
+    if (response.status === 401) {
+      location.href = "/admin/login";
+      return;
+    }
+    const { stats } = await response.json();
+
+    const setStat = (id: string, value: string) => {
+      const el = document.querySelector(`[data-stat-value="${id}"]`);
+      if (el) el.textContent = value;
+    };
+    setStat("total", fmt.format(stats.totalPosts));
+    setStat("chars", fmt.format(stats.totalChars));
+    setStat("draft", fmt.format(stats.draftPosts));
+    setStat("tags", fmt.format(stats.tagCount));
+
+    // Monthly bar chart (pure DOM bars, accent gradient)
+    const trend = document.getElementById("trend");
+    const labels = document.getElementById("trend-labels");
+    const max = Math.max(1, ...stats.monthly.map((m: { count: number }) => m.count));
+    if (trend) {
+      trend.innerHTML = "";
+      for (const month of stats.monthly as { label: string; count: number }[]) {
+        const bar = document.createElement("div");
+        bar.className =
+          "group relative flex-1 rounded-t-md transition-all duration-300 hover:opacity-80";
+        bar.style.height = `${Math.max(4, (month.count / max) * 100)}%`;
+        bar.style.background =
+          "linear-gradient(to top, color-mix(in srgb, var(--accent) 75%, transparent), color-mix(in srgb, var(--accent) 35%, transparent))";
+        bar.title = `${month.label} · ${month.count} 篇`;
+        if (month.count > 0) {
+          const tip = document.createElement("span");
+          tip.className =
+            "absolute -top-5 left-1/2 -translate-x-1/2 font-firacode text-[10px] text-foreground/60";
+          tip.textContent = String(month.count);
+          bar.appendChild(tip);
+        }
+        trend.appendChild(bar);
+      }
+    }
+    if (labels) {
+      const monthly = stats.monthly as { label: string }[];
+      labels.innerHTML = `<span>${monthly[0]?.label}</span><span>${monthly[monthly.length - 1]?.label}</span>`;
+    }
+
+    // Recent posts
+    const list = document.getElementById("recent-list");
+    if (list) {
+      list.innerHTML = "";
+      for (const post of stats.recent as {
+        slug: string;
+        title: string;
+        pubDatetime: string;
+        draft: boolean;
+      }[]) {
+        const li = document.createElement("li");
+        li.className = "flex items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-accent/8";
+        const date = new Date(post.pubDatetime);
+        const dateText = Number.isNaN(date.getTime())
+          ? "—"
+          : date.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
+        li.innerHTML = `
+          <span class="font-firacode text-xs text-foreground/40">${dateText}</span>
+          <a class="min-w-0 flex-1 truncate text-sm no-underline transition-colors hover:text-accent" href="/posts/${post.slug}" target="_blank">${post.title}</a>
+          ${post.draft ? '<span class="shrink-0 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">草稿</span>' : ""}
+          <a class="shrink-0 text-xs text-accent no-underline hover:underline" href="/admin/editor?slug=${post.slug}">编辑</a>
+        `;
+        list.appendChild(li);
+      }
+    }
+  }
+
+  loadDashboard();
+</script>

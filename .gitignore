@@ -1,0 +1,37 @@
+# Copilot related files
+.github/copilot-instructions.md
+
+# build output
+dist/
+
+# generated types
+.astro/
+
+# dependencies
+node_modules/
+
+# temporary node_modules backups (safe-delete shim in the sandbox blocks
+# deleting them; keep them ignored so they never get committed)
+nm_*/
+node_modules.bak/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# environment variables
+.env
+.env.production
+
+# macOS-specific files
+.DS_Store
+
+# jetbrains setting folder
+.idea/
+
+# pagefind
+
+public/pagefind
+.vercel

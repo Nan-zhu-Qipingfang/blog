@@ -1,0 +1,170 @@
+---
+export const prerender = false;
+
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { isAuthed } from "@/utils/adminAuth";
+
+// Server-side guard (Astro.redirect only works at page level)
+if (!(await isAuthed(Astro.cookies))) {
+  return Astro.redirect("/admin/login");
+}
+---
+
+<AdminLayout>
+  <div class="mx-auto max-w-4xl">
+    <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-extrabold">文章管理</h1>
+        <p class="mt-1 text-sm text-foreground/50">
+          共 <span id="post-count" class="font-firacode text-accent">0</span> 篇
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <input
+          id="search"
+          type="search"
+          placeholder="搜索标题或标签…"
+          class="w-44 rounded-xl border border-border bg-card/60 px-3.5 py-2 text-sm outline-none transition-colors focus:border-accent/60 sm:w-56"
+        />
+        <a
+          href="/admin/editor"
+          class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
+        >
+          + 新建
+        </a>
+      </div>
+    </header>
+
+    <div class="overflow-hidden rounded-2xl border border-border/60 bg-card/60">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[640px] text-left text-sm">
+          <thead>
+            <tr class="border-b border-border/60 text-xs text-foreground/45">
+              <th class="px-4 py-3 font-medium">标题</th>
+              <th class="px-4 py-3 font-medium">标签</th>
+              <th class="px-4 py-3 font-medium">发布日期</th>
+              <th class="px-4 py-3 text-right font-medium">字数</th>
+              <th class="px-4 py-3 font-medium">状态</th>
+              <th class="px-4 py-3 text-right font-medium">操作</th>
+            </tr>
+          </thead>
+          <tbody id="post-rows"></tbody>
+        </table>
+      </div>
+      <p id="empty-tip" class="hidden px-4 py-10 text-center text-sm text-foreground/40">
+          没有匹配的文章
+      </p>
+    </div>
+
+    <p class="mt-4 text-xs leading-relaxed text-foreground/40">
+      删除的文章会移入
+      <code class="font-firacode">src/data/admin/trash/</code>
+      回收站，不会直接销毁；修改后的文章在开发模式下即时生效，生产部署需重新构建。
+    </p>
+  </div>
+</AdminLayout>
+
+<script>
+  type PostMeta = {
+    slug: string;
+    title: string;
+    tags: string[];
+    pubDatetime: string;
+    chars: number;
+    draft: boolean;
+    featured: boolean;
+  };
+
+  let allPosts: PostMeta[] = [];
+
+  const fmt = new Intl.NumberFormat("zh-CN");
+
+  function escapeHtml(text: string): string {
+    return text
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  }
+
+  function render(keyword = "") {
+    const rows = document.getElementById("post-rows");
+    const emptyTip = document.getElementById("empty-tip");
+    if (!rows) return;
+    const key = keyword.trim().toLowerCase();
+    const filtered = key
+      ? allPosts.filter(
+          post =>
+            post.title.toLowerCase().includes(key) ||
+            post.tags.some(tag => tag.toLowerCase().includes(key)),
+        )
+      : allPosts;
+
+    rows.innerHTML = "";
+    for (const post of filtered) {
+      const date = new Date(post.pubDatetime);
+      const dateText = Number.isNaN(date.getTime())
+        ? "—"
+        : date.toLocaleDateString("zh-CN");
+      const badges = [
+        post.draft
+          ? '<span class="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">草稿</span>'
+          : "",
+        post.featured
+          ? '<span class="rounded-md bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">精选</span>'
+          : "",
+      ].join("");
+      const tr = document.createElement("tr");
+      tr.className = "border-b border-border/30 transition-colors last:border-0 hover:bg-accent/5";
+      tr.innerHTML = `
+        <td class="max-w-[260px] px-4 py-3">
+          <a class="block truncate font-medium no-underline transition-colors hover:text-accent" href="/posts/${post.slug}" target="_blank" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a>
+          <span class="font-firacode text-[11px] text-foreground/35">${post.slug}</span>
+        </td>
+        <td class="max-w-[140px] px-4 py-3">
+          <div class="flex flex-wrap gap-1">${post.tags.map(tag => `<span class="rounded-md bg-foreground/5 px-1.5 py-0.5 text-[10px] text-foreground/60">${escapeHtml(tag)}</span>`).join("")}</div>
+        </td>
+        <td class="whitespace-nowrap px-4 py-3 font-firacode text-xs text-foreground/55">${dateText}</td>
+        <td class="whitespace-nowrap px-4 py-3 text-right font-firacode text-xs text-foreground/55">${fmt.format(post.chars)}</td>
+        <td class="px-4 py-3"><div class="flex gap-1">${badges || '<span class="text-[10px] text-foreground/30">已发布</span>'}</div></td>
+        <td class="whitespace-nowrap px-4 py-3 text-right">
+          <a class="rounded-lg px-2 py-1 text-xs font-medium text-accent no-underline transition-colors hover:bg-accent/10" href="/admin/editor?slug=${post.slug}">编辑</a>
+          <button type="button" data-delete="${post.slug}" data-title="${escapeHtml(post.title)}" class="rounded-lg px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-500/10">删除</button>
+        </td>
+      `;
+      rows.appendChild(tr);
+    }
+    const empty = document.getElementById("empty-tip");
+    if (empty) empty.classList.toggle("hidden", filtered.length > 0);
+  }
+
+  async function loadPosts() {
+    const response = await fetch("/api/admin/posts");
+    if (response.status === 401) {
+      location.href = "/admin/login";
+      return;
+    }
+    const result = await response.json();
+    allPosts = result.posts ?? [];
+    const count = document.getElementById("post-count");
+    if (count) count.textContent = String(allPosts.length);
+    render((document.getElementById("search") as HTMLInputElement)?.value ?? "");
+  }
+
+  document.getElementById("search")?.addEventListener("input", event => {
+    render((event.target as HTMLInputElement).value);
+  });
+
+  document.getElementById("post-rows")?.addEventListener("click", async event => {
+    const target = event.target as HTMLElement;
+    const slug = target.getAttribute("data-delete");
+    if (!slug) return;
+    if (!confirm(`确定删除《${target.getAttribute("data-title")}》吗？\n文章将移入回收站（src/data/admin/trash/）。`)) return;
+    const response = await fetch(`/api/admin/post?slug=${encodeURIComponent(slug)}`, {
+      method: "DELETE",
+    });
+    if (response.ok) loadPosts();
+  });
+
+  loadPosts();
+</script>

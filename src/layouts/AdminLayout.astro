@@ -1,0 +1,119 @@
+---
+export const prerender = false;
+
+import "@/styles/global.css";
+
+const path = Astro.url.pathname;
+const navItems = [
+  { href: "/admin", label: "仪表盘", match: "/admin", icon: "grid" },
+  { href: "/admin/posts", label: "文章管理", match: "/admin/posts", icon: "doc" },
+  { href: "/admin/editor", label: "撰写文章", match: "/admin/editor", icon: "pen" },
+  { href: "/admin/comments", label: "评论管理", match: "/admin/comments", icon: "chat" },
+  { href: "/admin/users", label: "用户管理", match: "/admin/users", icon: "users" },
+  { href: "/admin/logs", label: "操作日志", match: "/admin/logs", icon: "list" },
+  { href: "/admin/settings", label: "设置", match: "/admin/settings", icon: "gear" },
+];
+
+const icons: Record<string, string> = {
+  grid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`,
+  doc: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>`,
+  pen: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`,
+  list: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>`,
+  chat: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+  users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  gear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  external: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>`,
+  logout: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>`,
+};
+
+const isActive = (item: (typeof navItems)[number]) =>
+  item.href === "/admin" ? path === "/admin" : path.startsWith(item.match);
+---
+
+<!doctype html>
+<html lang="zh-CN" class="admin-shell">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>后台管理 · Nanzhu's Blog</title>
+    <script is:inline>
+      (function () {
+        const saved = localStorage.getItem("theme");
+        const theme =
+          saved ||
+          (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.firstElementChild?.setAttribute("data-theme", theme);
+      })();
+    </script>
+  </head>
+  <body class="min-h-dvh bg-background text-foreground antialiased">
+    <div class="flex min-h-dvh flex-col lg:flex-row">
+      <!-- Sidebar -->
+      <aside
+        class="flex shrink-0 flex-col gap-6 border-b border-border/60 bg-card/40 p-4 lg:h-dvh lg:w-60 lg:border-b-0 lg:border-e lg:border-border/60 lg:p-5"
+      >
+        <a href="/admin" class="flex items-center gap-2.5 no-underline">
+          <span
+            class="flex size-9 items-center justify-center rounded-xl bg-accent/15 font-firacode text-sm font-bold text-accent"
+          >
+            LS
+          </span>
+          <span class="leading-tight">
+            <span class="block text-sm font-bold">南烛后台</span>
+            <span class="block text-xs text-foreground/50">Nanzhu's Blog Admin</span>
+          </span>
+        </a>
+
+        <nav class="flex flex-row gap-1 overflow-x-auto lg:flex-col">
+          {
+            navItems.map(item => (
+              <a
+                href={item.href}
+                class:list={[
+                  "flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium no-underline transition-colors duration-200",
+                  isActive(item)
+                    ? "bg-accent/12 text-accent"
+                    : "text-foreground/70 hover:bg-accent/8 hover:text-foreground",
+                ]}
+              >
+                <span class="size-4 shrink-0" set:html={icons[item.icon]} />
+                {item.label}
+              </a>
+            ))
+          }
+        </nav>
+
+        <div class="mt-auto flex flex-col gap-1 border-t border-border/40 pt-3">
+          <a
+            href="/"
+            class="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-foreground/70 no-underline transition-colors hover:bg-accent/8 hover:text-foreground"
+          >
+            <span class="size-4" set:html={icons.external} />
+            返回前台
+          </a>
+          <button
+            id="admin-logout"
+            type="button"
+            class="flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-foreground/70 transition-colors hover:bg-red-500/10 hover:text-red-500"
+          >
+            <span class="size-4" set:html={icons.logout} />
+            退出登录
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:h-dvh lg:overflow-y-auto">
+        <slot />
+      </main>
+    </div>
+
+    <script>
+      document.getElementById("admin-logout")?.addEventListener("click", async () => {
+        await fetch("/api/admin/logout", { method: "POST" });
+        location.href = "/admin/login";
+      });
+    </script>
+  </body>
+</html>

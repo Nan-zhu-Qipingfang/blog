@@ -1,0 +1,308 @@
+---
+/**
+ * Comments — article comment section with site-user login/register.
+ */
+const slug = Astro.url.pathname.replace(/^\/posts\//, "").replace(/\/$/, "") || "home";
+---
+
+<section id="comments" class="comments mt-10" data-slug={slug}>
+  <div class="comments-card">
+    <div class="comments-head">
+      <h2 class="comments-title">评 论</h2>
+      <span class="comments-count" data-comments-count>0</span>
+    </div>
+
+    <!-- Composer -->
+    <div class="composer" data-composer>
+      <!-- logged out: auth card -->
+      <div class="auth-card" data-auth-card hidden>
+        <div class="auth-tabs" role="tablist">
+          <button type="button" class="auth-tab is-active" data-tab="login">登录</button>
+          <button type="button" class="auth-tab" data-tab="register">注册</button>
+        </div>
+        <form class="auth-form" data-form="login" hidden>
+          <input class="auth-input" type="email" name="email" placeholder="邮箱" required autocomplete="email" />
+          <input class="auth-input" type="password" name="password" placeholder="密码（至少 6 位）" required autocomplete="current-password" />
+          <p class="auth-error" data-auth-error hidden></p>
+          <button class="auth-submit" type="submit">登录并评论</button>
+        </form>
+        <form class="auth-form" data-form="register">
+          <input class="auth-input" type="text" name="name" placeholder="昵称" required maxlength="24" />
+          <input class="auth-input" type="email" name="email" placeholder="邮箱" required autocomplete="email" />
+          <input class="auth-input" type="password" name="password" placeholder="设置密码（至少 6 位）" required minlength="6" autocomplete="new-password" />
+          <p class="auth-error" data-auth-error hidden></p>
+          <button class="auth-submit" type="submit">注册并评论</button>
+        </form>
+      </div>
+
+      <!-- logged in: composer -->
+      <div class="composer-inner" data-composer-inner hidden>
+        <p class="composer-identity">
+          <span class="composer-avatar" data-user-avatar></span>
+          <span>以 <strong data-user-name></strong> 身份评论</span>
+          <button type="button" class="link-quit" data-logout>退出</button>
+        </p>
+        <textarea
+          class="composer-input"
+          data-composer-input
+          rows="3"
+          maxlength="1000"
+          placeholder="说点什么吧…（支持 1000 字以内）"
+        ></textarea>
+        <div class="composer-foot">
+          <span class="composer-hint">Ctrl / ⌘ + Enter 发送</span>
+          <button type="button" class="composer-send" data-send>发表评论</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- List -->
+    <ul class="comment-list" data-comment-list></ul>
+    <p class="comment-empty" data-comment-empty hidden>还没有评论，来抢沙发吧～</p>
+  </div>
+</section>
+
+<script>
+  function initComments() {
+    const root = document.getElementById("comments");
+    if (!root) return;
+    const slug = root.getAttribute("data-slug") || "";
+    const list = root.querySelector("[data-comment-list]") as HTMLElement;
+    const empty = root.querySelector("[data-comment-empty]") as HTMLElement;
+    const countEl = root.querySelector("[data-comments-count]") as HTMLElement;
+    const authCard = root.querySelector("[data-auth-card]") as HTMLElement;
+    const composerInner = root.querySelector("[data-composer-inner]") as HTMLElement;
+    const userNameEl = root.querySelector("[data-user-name]") as HTMLElement;
+    const avatarEl = root.querySelector("[data-user-avatar]") as HTMLElement;
+    const errEls = [...root.querySelectorAll("[data-auth-error]")] as HTMLElement[];
+
+    let user: { id: string; name: string; email: string } | null = null;
+
+    const esc = (s: string) =>
+      s.replace(/[&<>"']/g, c =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string),
+      );
+
+    function timeAgo(iso: string): string {
+      const d = new Date(iso).getTime();
+      const diff = Date.now() - d;
+      const m = Math.floor(diff / 60000);
+      if (m < 1) return "刚刚";
+      if (m < 60) return `${m} 分钟前`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h} 小时前`;
+      const days = Math.floor(h / 24);
+      if (days < 30) return `${days} 天前`;
+      return new Date(iso).toLocaleDateString("zh-CN");
+    }
+
+    async function loadComments() {
+      try {
+        const res = await fetch(`/api/comments?slug=${encodeURIComponent(slug)}`);
+        const j = await res.json();
+        const comments = j.comments ?? [];
+        countEl.textContent = String(comments.length);
+        empty.hidden = comments.length > 0;
+        list.innerHTML = comments
+          .map(
+            (c: any) => `
+            <li class="comment-item">
+              <span class="comment-avatar">${esc((c.name || "?")[0].toUpperCase())}</span>
+              <div class="comment-body">
+                <div class="comment-meta"><strong>${esc(c.name)}</strong><time>${timeAgo(c.createdAt)}</time></div>
+                <p class="comment-text">${esc(c.content)}</p>
+              </div>
+            </li>`,
+          )
+          .join("");
+      } catch {
+        /* offline */
+      }
+    }
+
+    function setUser(u: { name: string } | null) {
+      user = u;
+      if (u) {
+        authCard.hidden = true;
+        composerInner.hidden = false;
+        userNameEl.textContent = u.name;
+        avatarEl.textContent = u.name[0].toUpperCase();
+      } else {
+        authCard.hidden = false;
+        composerInner.hidden = true;
+      }
+    }
+
+    async function loadMe() {
+      try {
+        const res = await fetch("/api/auth/me");
+        const j = await res.json();
+        setUser(j.user);
+      } catch {
+        setUser(null);
+      }
+    }
+
+    // auth tabs
+    root.querySelectorAll(".auth-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        root.querySelectorAll(".auth-tab").forEach(t => t.classList.remove("is-active"));
+        tab.classList.add("is-active");
+        const which = (tab as HTMLElement).dataset.tab;
+        root.querySelectorAll(".auth-form").forEach(f => {
+          ((f as HTMLElement).dataset.form === which) ? f.removeAttribute("hidden") : f.setAttribute("hidden", "");
+        });
+      });
+    });
+
+    root.querySelectorAll<HTMLFormElement>(".auth-form").forEach(form => {
+      form.addEventListener("submit", async e => {
+        e.preventDefault();
+        const which = (form as HTMLElement).dataset.form;
+        const fd = new FormData(form);
+        errEls.forEach(el => (el.hidden = true));
+        try {
+          const res = await fetch(`/api/auth/${which}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(Object.fromEntries(fd.entries())),
+          });
+          const j = await res.json();
+          if (!j.ok) {
+            const errEl = form.querySelector("[data-auth-error]") as HTMLElement;
+            errEl.textContent = j.error ?? "操作失败";
+            errEl.hidden = false;
+            return;
+          }
+          setUser(j.user);
+          form.reset();
+        } catch {
+          /* network */
+        }
+      });
+    });
+
+    root.querySelector("[data-logout]")?.addEventListener("click", async () => {
+      await fetch("/api/auth/logout", { method: "POST" });
+      setUser(null);
+    });
+
+    async function send() {
+      const input = root.querySelector("[data-composer-input]") as HTMLTextAreaElement;
+      const content = input.value.trim();
+      if (!content || !user) return;
+      const res = await fetch("/api/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, content }),
+      });
+      if (res.ok) {
+        input.value = "";
+        await loadComments();
+      }
+    }
+
+    root.querySelector("[data-send]")?.addEventListener("click", send);
+    root.querySelector("[data-composer-input]")?.addEventListener("keydown", e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") send();
+    });
+
+    loadComments();
+    loadMe();
+  }
+
+  initComments();
+  document.addEventListener("astro:page-load", initComments);
+</script>
+
+<style>
+  @reference "../styles/global.css";
+
+  .comments-card {
+    @apply mt-6 rounded-2xl border border-border/20 bg-background/60 p-5 sm:p-6;
+  }
+  .comments-head {
+    @apply flex items-baseline gap-2;
+  }
+  .comments-title {
+    @apply font-firacode text-sm font-bold tracking-widest text-foreground;
+  }
+  .comments-count {
+    @apply font-firacode text-xs text-accent;
+  }
+  .composer {
+    @apply mt-4;
+  }
+  .auth-card {
+    @apply rounded-xl border border-border/20 bg-muted/10 p-4;
+  }
+  .auth-tabs {
+    @apply mb-3 flex gap-1 rounded-full bg-muted/30 p-1 text-xs;
+  }
+  .auth-tab {
+    @apply flex-1 rounded-full px-3 py-1.5 text-center text-foreground/60 transition-colors hover:text-accent;
+  }
+  .auth-tab.is-active {
+    @apply bg-background font-semibold text-accent shadow-sm;
+  }
+  .auth-form {
+    @apply flex flex-col gap-2;
+  }
+  .auth-input {
+    @apply rounded-lg border border-border/25 bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-accent/50;
+  }
+  .auth-error {
+    @apply text-xs text-red-500;
+  }
+  .auth-submit {
+    @apply mt-1 rounded-full bg-accent/90 px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-accent;
+  }
+  .composer-identity {
+    @apply mb-2 flex items-center gap-2 text-xs text-foreground/60;
+  }
+  .composer-avatar {
+    @apply inline-flex size-6 items-center justify-center rounded-full bg-accent/85 text-xs font-bold text-background;
+  }
+  .link-quit {
+    @apply ml-auto text-xs text-foreground/40 underline-offset-2 hover:text-accent hover:underline;
+  }
+  .composer-input {
+    @apply w-full resize-y rounded-xl border border-border/25 bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-accent/50;
+  }
+  .composer-foot {
+    @apply mt-2 flex items-center justify-between;
+  }
+  .composer-hint {
+    @apply text-[11px] text-foreground/35;
+  }
+  .composer-send {
+    @apply rounded-full bg-accent/90 px-4 py-1.5 text-xs font-medium text-background transition-colors hover:bg-accent;
+  }
+  .comment-list {
+    @apply mt-5 flex list-none flex-col gap-4 p-0;
+  }
+  .comment-item {
+    @apply flex gap-3;
+  }
+  .comment-avatar {
+    @apply inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/80 text-xs font-bold text-background;
+  }
+  .comment-body {
+    @apply min-w-0 flex-1;
+  }
+  .comment-meta {
+    @apply flex items-center gap-2 text-xs;
+  }
+  .comment-meta strong {
+    @apply text-foreground/85;
+  }
+  .comment-meta time {
+    @apply text-foreground/35;
+  }
+  .comment-text {
+    @apply mt-1 text-sm leading-relaxed break-words text-foreground/80;
+  }
+  .comment-empty {
+    @apply mt-5 text-center text-xs text-foreground/40;
+  }
+</style>

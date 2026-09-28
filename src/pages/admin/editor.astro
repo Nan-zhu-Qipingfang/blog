@@ -1,0 +1,224 @@
+---
+export const prerender = false;
+
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { isAuthed } from "@/utils/adminAuth";
+
+// Server-side guard (Astro.redirect only works at page level)
+if (!(await isAuthed(Astro.cookies))) {
+  return Astro.redirect("/admin/login");
+}
+
+const inputClass =
+  "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60";
+---
+
+<AdminLayout>
+  <div class="mx-auto max-w-4xl">
+    <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 id="editor-title" class="text-xl font-extrabold">撰写新文章</h1>
+        <p id="editor-sub" class="mt-1 text-sm text-foreground/50">写入 src/data/blog/，开发模式下保存后前台即时生效</p>
+      </div>
+      <a href="/admin/posts" class="text-sm font-medium text-accent no-underline hover:underline">← 返回列表</a>
+    </header>
+
+    <div class="flex flex-col gap-4">
+      <section class="rounded-2xl border border-border/60 bg-card/60 p-5">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block sm:col-span-2">
+            <span class="mb-1.5 block text-xs font-medium text-foreground/60">标题 *</span>
+            <input id="f-title" type="text" class={inputClass} placeholder="文章标题" />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-foreground/60">Slug（URL，留空自动生成）</span>
+            <input id="f-slug" type="text" class={inputClass + " font-firacode"} placeholder="my-new-post" />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-foreground/60">标签（英文逗号分隔）</span>
+            <input id="f-tags" type="text" class={inputClass} placeholder="Astro, 随笔" />
+          </label>
+          <label class="block sm:col-span-2">
+            <span class="mb-1.5 block text-xs font-medium text-foreground/60">描述（摘要）</span>
+            <textarea id="f-desc" rows="2" class={inputClass + " resize-y"} placeholder="显示在文章列表与分享卡片上的摘要"></textarea>
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-foreground/60">发布时间</span>
+            <input id="f-date" type="datetime-local" class={inputClass + " font-firacode"} />
+          </label>
+          <div class="flex items-end gap-5 pb-1">
+            <label class="flex cursor-pointer items-center gap-2 text-sm">
+              <input id="f-featured" type="checkbox" class="size-4 accent-[var(--accent)]" />
+              精选
+            </label>
+            <label class="flex cursor-pointer items-center gap-2 text-sm">
+              <input id="f-draft" type="checkbox" class="size-4 accent-[var(--accent)]" />
+              存为草稿
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-border/60 bg-card/60 p-5">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-xs font-medium text-foreground/60">正文（Markdown）*</span>
+          <div class="flex rounded-lg border border-border/60 p-0.5 text-xs">
+            <button id="tab-write" type="button" class="cursor-pointer rounded-md bg-accent/12 px-3 py-1 font-medium text-accent">编辑</button>
+            <button id="tab-preview" type="button" class="cursor-pointer rounded-md px-3 py-1 font-medium text-foreground/50 transition-colors hover:text-foreground">预览</button>
+          </div>
+        </div>
+        <textarea id="f-content" rows="18" class={inputClass + " resize-y font-firacode text-[13px] leading-relaxed"} placeholder="## 用 Markdown 书写&#10;&#10;支持代码块、引用、图片等语法。"></textarea>
+        <div id="preview" class="app-prose mt-2 hidden max-h-[480px] overflow-y-auto rounded-xl border border-border/40 p-4 text-sm"></div>
+      </section>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          id="save-btn"
+          type="button"
+          class="cursor-pointer rounded-xl bg-accent px-6 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+        >
+          保存文章
+        </button>
+        <button
+          id="delete-btn"
+          type="button"
+          class="hidden cursor-pointer rounded-xl border border-red-500/40 px-4 py-2.5 text-sm font-medium text-red-500 transition-colors hover:bg-red-500/10"
+        >
+          删除（移入回收站）
+        </button>
+        <span id="save-status" class="text-xs text-foreground/45"></span>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  import { marked } from "marked";
+
+  type PostData = {
+    slug: string;
+    frontmatter: Record<string, unknown>;
+    content: string;
+  };
+
+  const originalSlug = new URLSearchParams(location.search).get("slug") ?? "";
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
+    document.getElementById(id) as T;
+
+  const toLocalInput = (iso: string) => {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "";
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  if (originalSlug) {
+    $("editor-title").textContent = "编辑文章";
+    $("delete-btn").classList.remove("hidden");
+    (async () => {
+      const response = await fetch(`/api/admin/post?slug=${encodeURIComponent(originalSlug)}`);
+      if (response.status === 401) {
+        location.href = "/admin/login";
+        return;
+      }
+      const result = await response.json();
+      if (!result.ok) {
+        $("save-status").textContent = `加载失败：${result.message}`;
+        return;
+      }
+      const post: PostData = result.post;
+      const fm = post.frontmatter;
+      ($("f-title") as HTMLInputElement).value = String(fm.title ?? "");
+      ($("f-slug") as HTMLInputElement).value = post.slug;
+      ($("f-desc") as HTMLTextAreaElement).value = String(fm.description ?? "");
+      ($("f-tags") as HTMLInputElement).value = Array.isArray(fm.tags)
+        ? (fm.tags as string[]).join(", ")
+        : "";
+      ($("f-date") as HTMLInputElement).value = toLocalInput(String(fm.pubDatetime ?? ""));
+      ($("f-featured") as HTMLInputElement).checked = Boolean(fm.featured);
+      ($("f-draft") as HTMLInputElement).checked = Boolean(fm.draft);
+      ($("f-content") as HTMLTextAreaElement).value = post.content;
+      $("editor-sub").textContent = `正在编辑 src/data/blog/${post.slug}.md`;
+    })();
+  } else {
+    ($("f-date") as HTMLInputElement).value = toLocalInput(new Date().toISOString());
+  }
+
+  // Tab switching: write <-> preview
+  const writeTab = $("tab-write");
+  const previewTab = $("tab-preview");
+  writeTab.addEventListener("click", () => {
+    $("f-content").classList.remove("hidden");
+    $("preview").classList.add("hidden");
+    writeTab.classList.add("bg-accent/12", "text-accent");
+    previewTab.classList.remove("bg-accent/12", "text-accent");
+  });
+  previewTab.addEventListener("click", () => {
+    $("preview").innerHTML = marked.parse(($("f-content") as HTMLTextAreaElement).value) as string;
+    $("f-content").classList.add("hidden");
+    $("preview").classList.remove("hidden");
+    previewTab.classList.add("bg-accent/12", "text-accent");
+    writeTab.classList.remove("bg-accent/12", "text-accent");
+  });
+
+  // Save
+  $("save-btn").addEventListener("click", async () => {
+    const status = $("save-status");
+    const button = $("save-btn") as HTMLButtonElement;
+    const title = ($("f-title") as HTMLInputElement).value.trim();
+    const content = ($("f-content") as HTMLTextAreaElement).value.trim();
+    if (!title || !content) {
+      status.textContent = "标题和正文不能为空";
+      status.style.color = "var(--color-red-500, #ef4444)";
+      return;
+    }
+    button.disabled = true;
+    status.textContent = "保存中…";
+    status.style.color = "";
+    try {
+      const response = await fetch("/api/admin/post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: ($("f-slug") as HTMLInputElement).value.trim(),
+          originalSlug: originalSlug || undefined,
+          title,
+          description: ($("f-desc") as HTMLTextAreaElement).value.trim(),
+          tags: ($("f-tags") as HTMLInputElement).value
+            .split(/[,，]/)
+            .map(tag => tag.trim())
+            .filter(Boolean),
+          pubDatetime: new Date(($("f-date") as HTMLInputElement).value).toISOString(),
+          featured: ($("f-featured") as HTMLInputElement).checked,
+          draft: ($("f-draft") as HTMLInputElement).checked,
+          content,
+        }),
+      });
+      const result = await response.json();
+      if (result.ok) {
+        status.textContent = "✓ 已保存";
+        status.style.color = "var(--accent)";
+        setTimeout(() => {
+          location.href = "/admin/posts";
+        }, 600);
+      } else {
+        status.textContent = result.message ?? "保存失败";
+        status.style.color = "var(--color-red-500, #ef4444)";
+      }
+    } catch {
+      status.textContent = "网络错误，请重试";
+      status.style.color = "var(--color-red-500, #ef4444)";
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  // Delete
+  $("delete-btn").addEventListener("click", async () => {
+    if (!confirm("确定删除这篇文章吗？文章将移入回收站。")) return;
+    const response = await fetch(`/api/admin/post?slug=${encodeURIComponent(originalSlug)}`, {
+      method: "DELETE",
+    });
+    if (response.ok) location.href = "/admin/posts";
+  });
+</script>
