@@ -41,6 +41,9 @@ importers:
       marked:
         specifier: ^18.0.14
         version: 18.0.14
+      pagefind:
+        specifier: ^1.5.2
+        version: 1.5.2
       remark-collapse:
         specifier: ^0.1.2
         version: 0.1.2
@@ -87,9 +90,6 @@ importers:
       globals:
         specifier: ^17.6.0
         version: 17.6.0
-      pagefind:
-        specifier: ^1.5.2
-        version: 1.5.2
       prettier:
         specifier: ^3.8.3
         version: 3.8.3
