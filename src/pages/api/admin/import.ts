@@ -47,7 +47,7 @@ function slugify(input: string): string {
   const base = input
     .trim()
     .toLowerCase()
-    .replace(/\.(md|markdown|mdx)$/i, "")
+    .replace(/\.(md|markdown|mdx|txt)$/i, "")
     // keep CJK, letters, digits; everything else becomes a dash
     .replace(/[^\p{Script=Han}\p{L}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "")
