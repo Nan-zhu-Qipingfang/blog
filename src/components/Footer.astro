@@ -22,21 +22,14 @@ const { noMarginTop = false, class: className, ...attrs } = Astro.props;
 ---
 
 <footer
-  class:list={["footer-wrapper", { "mt-auto": !noMarginTop }, className]}
+  class:list={["footer-shell", { "mt-auto": !noMarginTop }, className]}
   role="contentinfo"
   {...attrs}
 >
-  <!-- Top gradient border -->
-  <div
-    class="h-px w-full bg-linear-to-r from-transparent via-border/40 to-transparent"
-  >
-  </div>
-
-  <div class="app-layout py-8 sm:py-10">
-    <!-- Main footer grid -->
-    <div
-      class="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-between"
-    >
+  <!-- 与 main#main-content 同材质的玻璃卡片：同宽、同圆角、同边框，
+       与主面板之间留一条露出背景的呼吸缝，避免"面板戛然而止"的硬接缝 -->
+  <div class="footer-wrapper app-layout py-8 sm:py-10">
+    <div class="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-between">
       <!-- Brand column -->
       <div class="flex flex-col items-center gap-3 sm:items-start">
         <a
@@ -162,22 +155,22 @@ const { noMarginTop = false, class: className, ...attrs } = Astro.props;
 </script>
 
 <style>
+  /* 透明外壳：保住 mt-auto 的 sticky-footer 行为，并在主面板与页脚卡片
+     之间撑出一条固定呼吸缝（长页面时 auto margin 归零也不贴死） */
+  .footer-shell {
+    padding-top: 0.9rem;
+  }
+
+  /* 页脚卡片：与 main#main-content 完全同款的面板材质 */
   .footer-wrapper {
     position: relative;
     isolation: isolate;
-    /* Soft gradient descending to bottom */
-    background: linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--background) 30%, transparent),
-      color-mix(in srgb, var(--background) 80%, transparent) 80%
-    );
-  }
-
-  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .footer-wrapper {
-      backdrop-filter: blur(12px) saturate(140%);
-      -webkit-backdrop-filter: blur(12px) saturate(140%);
-    }
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 1.5rem;
+    box-shadow: 0 10px 36px -16px color-mix(in srgb, var(--background) 65%, transparent);
+    /* app-layout 的 px-4 是 1rem，主面板是 1.25rem，这里对齐主面板 */
+    padding-inline: 1.25rem;
   }
 
   .footer-home-link {
