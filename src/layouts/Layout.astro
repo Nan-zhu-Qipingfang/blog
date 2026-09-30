@@ -235,6 +235,13 @@ const showGrain = SITE.backdropEffects.grain;
         // Set theme immediately to prevent flash
         document.firstElementChild?.setAttribute("data-theme", themeValue);
 
+        // Preload the theme's background image so it paints on first frame
+        const bgLink = document.createElement("link");
+        bgLink.rel = "preload";
+        bgLink.as = "image";
+        bgLink.href = themeValue === "dark" ? "/bg-dark.webp" : "/bg-light.webp";
+        document.head.appendChild(bgLink);
+
         // Export minimal API for external script
         window.theme = {
           themeValue: themeValue,
@@ -247,6 +254,9 @@ const showGrain = SITE.backdropEffects.grain;
     </script>
   </head>
   <body>
+    <!-- Full-viewport theme background image (light / dark variants) -->
+    <div class="site-bg" aria-hidden="true" transition:persist></div>
+
     <!-- Global decorative backdrop (grid, glow, cursor glow, noise) -->
     <div class="site-backdrop pointer-events-none" aria-hidden="true" transition:persist>
       <div class="site-grid"></div>

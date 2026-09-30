@@ -27,7 +27,7 @@ const text = (summary ?? "").trim();
       <div class="relative mb-3 flex items-center justify-between gap-3">
         <div class="flex items-center gap-2">
           <span
-            class="flex size-7 items-center justify-center rounded-lg bg-accent/10 text-accent"
+            class="ai-icon flex size-7 items-center justify-center rounded-lg bg-accent/10 text-accent"
           >
             <svg
               class="size-4"
@@ -43,9 +43,9 @@ const text = (summary ?? "").trim();
               <path d="M5 3v4M19 17v4M3 5h4M17 19h4" />
             </svg>
           </span>
-          <span class="text-sm font-semibold tracking-wide">AI 摘要</span>
+          <span class="ai-title text-sm font-semibold tracking-wide">AI 摘要</span>
           <span
-            class="ai-status font-firacode text-[11px] text-accent/70"
+            class="ai-status font-firacode rounded-full border border-accent/20 bg-accent/5 px-2 py-0.5 text-[11px] text-accent/80"
             data-ai-status
           >
             生成中<span class="ai-dots" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -75,6 +75,9 @@ const text = (summary ?? "").trim();
         </button>
       </div>
 
+      <!-- shimmer divider -->
+      <div class="ai-shimmer relative mb-3 h-px" aria-hidden="true"></div>
+
       <p
         class="relative min-h-[3.5rem] text-[0.925rem] leading-relaxed text-foreground/75"
         data-ai-text
@@ -89,6 +92,114 @@ const text = (summary ?? "").trim();
 }
 
 <style>
+  /* ── 流动描边：一段高光沿卡片边框缓慢旋转 ── */
+  @property --ai-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+  }
+  #ai-summary {
+    --ai-angle: 0deg;
+  }
+  #ai-summary::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(
+      from var(--ai-angle),
+      transparent 0deg 40deg,
+      color-mix(in srgb, var(--accent) 70%, transparent) 90deg,
+      color-mix(in srgb, var(--accent) 12%, transparent) 150deg,
+      transparent 210deg 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    animation: ai-border-spin 7s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes ai-border-spin {
+    to {
+      --ai-angle: 360deg;
+    }
+  }
+
+  /* ── 打字完成时的一次性光环 ── */
+  #ai-summary.done {
+    animation: ai-done-glow 1s ease-out;
+  }
+  @keyframes ai-done-glow {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 38%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 16px transparent;
+    }
+  }
+
+  /* ── 图标呼吸光 ── */
+  .ai-icon {
+    animation: ai-icon-pulse 2.6s ease-in-out infinite;
+  }
+  @keyframes ai-icon-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 32%, transparent);
+    }
+    55% {
+      box-shadow: 0 0 0 6px transparent;
+    }
+  }
+
+  /* ── 渐变标题 ── */
+  .ai-title {
+    background: linear-gradient(
+      115deg,
+      var(--accent) 10%,
+      color-mix(in oklab, var(--accent) 55%, var(--foreground)) 90%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ── 扫光分隔线 ── */
+  .ai-shimmer {
+    overflow: hidden;
+    background: color-mix(in srgb, var(--border) 22%, transparent);
+  }
+  .ai-shimmer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 38%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--accent) 75%, transparent),
+      transparent
+    );
+    animation: ai-sweep 3.4s ease-in-out infinite;
+  }
+  @keyframes ai-sweep {
+    0% {
+      transform: translateX(-130%);
+    }
+    55%,
+    100% {
+      transform: translateX(340%);
+    }
+  }
+
   .ai-dots {
     display: inline-flex;
     gap: 3px;
@@ -138,8 +249,16 @@ const text = (summary ?? "").trim();
     }
   }
 
+  /* 状态徽章淡入 */
+  .ai-status {
+    transition: opacity 0.3s ease;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .ai-dots i {
+      animation: none;
+    }
+    #ai-summary::before {
       animation: none;
     }
   }
@@ -156,20 +275,22 @@ const text = (summary ?? "").trim();
 
     const full = textEl.getAttribute("data-full") || "";
     let timer = null;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function setStatus(html) {
+      if (statusEl) statusEl.innerHTML = html;
+    }
 
     function play(speed) {
       if (timer) clearInterval(timer);
-      if (reduced || !full) {
-        textEl.textContent = full;
-        textEl.classList.remove("typing");
-        if (statusEl) statusEl.textContent = "已完成";
+      if (!full) {
+        textEl.textContent = "";
         return;
       }
       let i = 0;
       textEl.textContent = "";
       textEl.classList.add("typing");
-      if (statusEl) statusEl.innerHTML = '生成中<span class="ai-dots"><i></i><i></i><i></i></span>';
+      root.classList.remove("done");
+      setStatus('生成中<span class="ai-dots"><i></i><i></i><i></i></span>');
       timer = setInterval(() => {
         // variable speed: 1-3 chars per tick feels like real streaming
         i = Math.min(full.length, i + 1 + Math.floor(Math.random() * 2));
@@ -178,7 +299,8 @@ const text = (summary ?? "").trim();
           clearInterval(timer);
           timer = null;
           textEl.classList.remove("typing");
-          if (statusEl) statusEl.textContent = "已完成";
+          setStatus("✓ 已完成");
+          root.classList.add("done");
         }
       }, speed);
     }

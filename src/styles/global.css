@@ -25,6 +25,11 @@ html[data-theme="light"] {
   --accent: #1158d1;
   --muted: #bbc789;
   --border: #7cadff;
+  /* ── 全屏背景图（白天模式）+ 内容玻璃面板 ── */
+  --bg-image: url("/bg-light.webp");
+  --bg-veil: color-mix(in srgb, var(--background) 30%, transparent);
+  --panel-bg: color-mix(in srgb, var(--background) 80%, transparent);
+  --panel-border: color-mix(in srgb, var(--border) 26%, transparent);
 }
 
 html[data-theme="dark"] {
@@ -33,6 +38,11 @@ html[data-theme="dark"] {
   --accent: #008fec;
   --muted: #212f3f;
   --border: #2264e3;
+  /* ── 全屏背景图（黑夜模式）+ 内容玻璃面板 ── */
+  --bg-image: url("/bg-dark.webp");
+  --bg-veil: color-mix(in srgb, var(--background) 38%, transparent);
+  --panel-bg: color-mix(in srgb, var(--background) 72%, transparent);
+  --panel-border: color-mix(in srgb, var(--border) 26%, transparent);
 }
 
 @theme inline {
@@ -44,6 +54,41 @@ html[data-theme="dark"] {
   --color-accent: var(--accent);
   --color-muted: var(--muted);
   --color-border: var(--border);
+}
+
+/* ─── 全屏背景图：白天 / 黑夜各一张，随主题切换 ───
+   固定定位 + cover，不随滚动重绘；::after 叠一层主题色薄纱，
+   保证图片上直接呈现的文字（页头/页脚）依然可读。 */
+html {
+  background: var(--background);
+}
+.site-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-image: var(--bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+.site-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--bg-veil);
+}
+
+/* ─── 内容玻璃面板（对标 blog.liushen.fun）───
+   所有页面主内容（main#main-content）浮在一块半透明圆角面板上，
+   背景图从面板两侧与间隙透出。不用 backdrop-filter——大面积模糊
+   会让滚动掉帧，靠不透明度保证可读性。 */
+main#main-content {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 36px -16px color-mix(in srgb, var(--background) 65%, transparent);
+  padding-inline: 1.25rem;
 }
 
 .italic,
@@ -68,7 +113,7 @@ i {
     @apply overflow-y-scroll scroll-smooth;
   }
   body {
-    @apply flex min-h-svh flex-col bg-background font-app text-foreground selection:bg-accent/75 selection:text-background;
+    @apply flex min-h-svh flex-col font-app text-foreground selection:bg-accent/75 selection:text-background;
   }
   a,
   button {

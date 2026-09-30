@@ -32,10 +32,38 @@
    | Output Directory | `dist` |
    | Node.js Version | `20.x`（或 22.x） |
 
-   > 说明：本项目的构建脚本为 `node scripts/sync-kv-content.mjs && astro build && pagefind --site dist`，构建前会把后台保存在 KV 的文章同步回内容目录，并生成站内全文搜索（Pagefind）索引。
+   > 说明：本项目的构建脚本为
+   > `node scripts/sync-kv-content.mjs && astro build && pagefind --site dist/client && node scripts/postbuild-pagefind.mjs`：
+   > ① 构建前把后台保存在 KV 的文章同步回内容目录；② 生成站内全文搜索（Pagefind）索引到 `dist/client/pagefind`；
+   > ③ 把索引补进 `.vercel/output/static`（原因见下方“为什么需要 postbuild-pagefind”）。
 
 3. 先**不要急着点 Deploy**，先到下一步配置环境变量。
 4. 点击 **Deploy**，等待构建完成。首次构建约 1–3 分钟（受 npmmirror 镜像源网络影响可能稍慢，见第四节注意事项）。
+
+### 为什么需要 `postbuild-pagefind.mjs`（踩坑记录）
+
+`@astrojs/vercel` 是在 **`astro build` 结束的那一刻**（适配器自己的 `astro:build:done` 钩子）把静态站点快照进 `.vercel/output/static` 的：
+
+```js
+// node_modules/@astrojs/vercel/dist/index.js
+const _staticDir = _buildOutput === "static" ? _config.outDir : _config.build.client;
+cpSync(_staticDir, "./.vercel/output/static/", { recursive: true });
+```
+
+而 `pagefind` 是在 `astro build` **之后**才往 `dist/client/pagefind` 写索引的，所以索引天生进不了部署产物。
+表现很典型：构建日志里 pagefind 明明成功，本地 `dist/client/pagefind/*` 也都在，但线上 ——
+
+```
+/rss.xml                        -> 200   （构建期生成，被快照进去了）
+/pagefind/pagefind.js           -> 404   （构建后生成，没被快照）
+/pagefind/pagefind-entry.json   -> 404
+```
+
+`scripts/postbuild-pagefind.mjs` 就是补这一步：pagefind 跑完后把索引镜像进 `.vercel/output/static/pagefind`。
+脚本带保护——只有目标目录里已经存在 `index.html`（确认它确实是站点根）才会复制，避免把空目录或半成品提升为部署产物。
+
+> 另外 `pagefind` 已从 `devDependencies` 移到 `dependencies`：它是构建脚本真正需要的命令行工具，
+> 万一部署环境按 `NODE_ENV=production` 只装生产依赖，放在 devDependencies 会导致构建失败。
 
 ---
 

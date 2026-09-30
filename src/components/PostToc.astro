@@ -111,6 +111,48 @@
   #post-toc.collapsed #toc-chevron {
     transform: rotate(-90deg);
   }
+
+  /* ═══ 桌面宽屏：目录固定在内容区右侧（对标 blog.liushen.fun）═══
+     内容列 max-w-5xl(64rem)，半宽 32rem；侧栏锚在 50% + 32rem 右侧，
+     宽度用 clamp 自适应视口，1536px 以下自动回落为文内折叠卡。 */
+  @media (min-width: 1536px) {
+    #post-toc {
+      position: fixed;
+      top: 6.5rem;
+      left: calc(50% + 32rem + 1.5rem);
+      width: clamp(11rem, 50vw - 32.5rem - 1.5rem, 15rem);
+      max-height: calc(100vh - 9rem);
+      margin: 0;
+      padding: 0.9rem 0.4rem 0.9rem 0.75rem;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 1rem;
+      box-shadow: 0 10px 36px -18px color-mix(in srgb, var(--background) 65%, transparent);
+      overflow: visible;
+      z-index: 30;
+    }
+    /* 侧栏模式下展开固定，标题行仅作展示 */
+    #post-toc #toc-toggle {
+      pointer-events: none;
+      cursor: default;
+      padding: 0 0.35rem 0.5rem 0;
+    }
+    #post-toc #toc-chevron {
+      display: none;
+    }
+    #post-toc.collapsed #toc-panel {
+      display: block;
+    }
+    #post-toc #toc-panel {
+      padding: 0;
+      max-height: calc(100vh - 12.5rem);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent) transparent;
+      mask-image: linear-gradient(to bottom, black 88%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, black 88%, transparent 100%);
+    }
+  }
 </style>
 
 <script is:inline data-astro-rerun>
