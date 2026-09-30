@@ -8,9 +8,14 @@ import { isAuthed } from "@/utils/adminAuth";
 if (!(await isAuthed(Astro.cookies))) {
   return Astro.redirect("/admin/login");
 }
-import { hasCustomPassword } from "@/utils/adminAuth";
+import { passwordSource } from "@/utils/adminAuth";
 
-const customPassword = await hasCustomPassword();
+const source = await passwordSource();
+const sourceText: Record<typeof source, string> = {
+  hash: "当前使用自定义密码（已持久化保存）",
+  env: "当前使用环境变量 ADMIN_PASSWORD 中配置的密码",
+  none: "尚未配置任何密码：请在 .env 或部署平台的环境变量中设置 ADMIN_PASSWORD，否则将无法登录",
+};
 
 const inputClass =
   "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60";
@@ -25,13 +30,7 @@ const inputClass =
 
     <section class="rounded-2xl border border-border/60 bg-card/60 p-5">
       <h2 class="mb-1 text-sm font-bold">修改管理员密码</h2>
-      <p class="mb-4 text-xs text-foreground/45">
-        {
-          customPassword
-            ? "当前使用自定义密码（保存在 src/data/admin/auth.json）"
-            : "当前使用演示默认密码 admin12346，建议尽快修改"
-        }
-      </p>
+      <p class="mb-4 text-xs text-foreground/45">{sourceText[source]}</p>
       <form id="password-form" class="flex max-w-sm flex-col gap-3">
         <label class="block">
           <span class="mb-1.5 block text-xs font-medium text-foreground/60">旧密码</span>

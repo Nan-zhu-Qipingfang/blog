@@ -81,10 +81,26 @@ cpSync(_staticDir, "./.vercel/output/static/", { recursive: true });
    | `PUBLIC_SOCIAL_EMAIL` | `you@example.com` |
    | `PUBLIC_EDIT_POST_URL` | `https://github.com/your/repo/edit/main/`（"Edit this post" 前缀） |
    | `PUBLIC_GOOGLE_SITE_VERIFICATION` | Google Search Console 验证令牌（可选） |
+   | `ADMIN_USER` | 后台登录用户名，留空则默认 `admin` |
+   | `ADMIN_PASSWORD` | **后台登录密码（必填，否则后台完全登不进去）** |
+   | `ADMIN_SECRET` | 会话签名密钥，任意长随机字符串（`openssl rand -hex 32`）；不配会出现"登录成功但一刷新就掉线" |
+   | `DEPLOY_HOOK_URL` | 后台保存文章后自动触发重新部署（可选，见 3.1） |
 
 3. 变量添加后，**重新触发一次部署**（在 Deployments 里 Redeploy，或重新 push 一次），让环境变量生效。
 
 > 参考：仓库根目录的 `.env.example` 列出了全部可用变量及其含义。
+
+### 3.0 后台账号密码（必做，否则登不进后台）
+
+为了让源码仓库里**不出现任何明文密码**，后台密码只从环境变量读取，优先级：
+
+1. 后台「设置」页改过并写入 KV 的密码（SHA-256 哈希）；
+2. 环境变量 `ADMIN_PASSWORD`；
+3. 都没有 → **拒绝任何登录**。
+
+所以首次部署后请务必在 Vercel 配上 `ADMIN_PASSWORD`（本地开发则写在 `.env` 里）。登录入口 `https://你的域名/admin`，账号默认 `admin`（可用 `ADMIN_USER` 改）。
+
+> 想恢复成环境变量里那个密码：删掉 KV 中的 `admin:auth` 键即可（本地是删 `src/data/admin/auth.json`）。
 
 ### 3.1 后台存储（KV）配置 —— 修复“登录一直显示网络错误，请重试”（强烈建议）
 
@@ -101,8 +117,8 @@ cpSync(_staticDir, "./.vercel/output/static/", { recursive: true });
 4. 添加完成后 **Redeploy** 一次让配置生效。
 
 > 说明：
-> - 不配置 KV 时本地开发一切正常（自动回退到本地 JSON 文件），只是线上后台的数据无法持久化。
-> - 后台默认账号 `admin` / `admin12346`，登录后请立即在「设置」页修改密码（修改后的密码也保存在 KV 里）。
+> - 不配置 KV 时本地开发一切正常（自动回退到本地 JSON 文件），只是线上后台的数据无法持久化，**且改密码、写文章、导入 MD 都会失败**。
+> - 后台账号密码见 **3.0**：源码内已无默认密码，必须在环境变量 `ADMIN_PASSWORD` 里配置。登录后可在「设置」页改密码（改后的密码保存在 KV 里）。
 > - KV 里的文章仅是“发布暂存区”，正式内容仍以 Git 仓库 `src/data/blog/*.md` 为准；同步脚本每次构建时把 KV 内容覆盖写入文件。
 
 ---
