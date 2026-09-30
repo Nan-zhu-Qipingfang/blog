@@ -6,28 +6,72 @@
  * right-click menu (prev / next / copy title).
  */
 ---
+
 <div class="music-pill" data-music-pill>
   <img class="music-cover" data-music-cover alt="" aria-hidden="true" hidden />
   <span class="music-cover music-cover--fallback" data-music-fallback>
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg>
+    <svg viewBox="0 0 24 24" fill="currentColor"
+      ><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"></path></svg
+    >
   </span>
   <div class="music-info">
     <span class="music-name" data-music-name>随机热歌</span>
     <span class="music-lyric" data-music-lyric>点 ▶ 换首歌唱唱</span>
   </div>
   <div class="music-ctrls">
-    <button type="button" class="music-btn" data-music-prev aria-label="上一首" title="上一首">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+    <button
+      type="button"
+      class="music-btn"
+      data-music-prev
+      aria-label="上一首"
+      title="上一首"
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor"
+        ><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"></path></svg
+      >
     </button>
-    <button type="button" class="music-btn music-btn--main" data-music-toggle aria-label="播放" title="播放 / 暂停">
-      <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-      <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+    <button
+      type="button"
+      class="music-btn music-btn--main"
+      data-music-toggle
+      aria-label="播放"
+      title="播放 / 暂停"
+    >
+      <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"
+        ><path d="M8 5v14l11-7z"></path></svg
+      >
+      <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor"
+        ><path d="M6 5h4v14H6zm8 0h4v14h-4z"></path></svg
+      >
     </button>
-    <button type="button" class="music-btn" data-music-next aria-label="下一首" title="下一首">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
+    <button
+      type="button"
+      class="music-btn"
+      data-music-next
+      aria-label="下一首"
+      title="下一首"
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor"
+        ><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"></path></svg
+      >
     </button>
-    <button type="button" class="music-btn" data-music-rand aria-label="随机换歌" title="随机换歌">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    <button
+      type="button"
+      class="music-btn"
+      data-music-rand
+      aria-label="随机换歌"
+      title="随机换歌"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        ><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"
+        ></path></svg
+      >
     </button>
   </div>
 </div>
@@ -40,40 +84,61 @@
 
 <script>
   function initMusicPill() {
-    if (document.querySelector("[data-music-audio]")) return;
-    if (document.querySelector("[data-music-pill]")) {
-      // audio element is created once per full page load; view transitions
-      // keep the DOM — only bind once by marking the body
-      if ((document.body as any).dataset.musicInit) return;
-      (document.body as any).dataset.musicInit = "1";
-    } else {
-      return;
-    }
+    const root = document.querySelector(
+      "[data-music-pill]"
+    ) as HTMLElement | null;
+    const menu = document.querySelector(
+      "[data-music-menu]"
+    ) as HTMLElement | null;
+    if (!root || !menu) return;
 
-    const root = document.querySelector("[data-music-pill]") as HTMLElement;
-    const menu = document.querySelector("[data-music-menu]") as HTMLElement;
+    // Bind once **per pill element**. The old guards (a document-wide
+    // [data-music-audio] lookup and a flag on <body>) could survive a
+    // view-transition swap in some orders, leaving the freshly rendered pill
+    // with no <audio> element — i.e. a pill that looks fine but does nothing.
+    if (root.dataset.musicReady === "1") return;
+    root.dataset.musicReady = "1";
+
     const audio = document.createElement("audio");
     audio.preload = "none";
     audio.dataset.musicAudio = "1";
     root.appendChild(audio);
 
-    const coverImg = root.querySelector("[data-music-cover]") as HTMLImageElement;
-    const coverFallback = root.querySelector("[data-music-fallback]") as HTMLElement;
+    const coverImg = root.querySelector(
+      "[data-music-cover]"
+    ) as HTMLImageElement;
+    const coverFallback = root.querySelector(
+      "[data-music-fallback]"
+    ) as HTMLElement;
     const nameEl = root.querySelector("[data-music-name]") as HTMLElement;
     const lyricEl = root.querySelector("[data-music-lyric]") as HTMLElement;
     const btnToggle = root.querySelector("[data-music-toggle]") as HTMLElement;
 
-    type Song = { name: string; artist: string; url: string; pic: string; lrc: string; lines: { t: number; text: string }[] };
+    type Song = {
+      name: string;
+      artist: string;
+      url: string;
+      pic: string;
+      lrc: string;
+      lines: { t: number; text: string }[];
+    };
     let song: Song | null = null;
     let loading = false;
     let lrcTimer = 0;
+    // Consecutive playback failures — without a cap a dead source makes the
+    // pill bounce between "换一首" and an error forever.
+    let failures = 0;
+    const MAX_FAILURES = 3;
 
     function parseLrc(lrc: string) {
       const lines: { t: number; text: string }[] = [];
       for (const raw of (lrc || "").split("\n")) {
         const m = raw.match(/\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\](.*)$/);
         if (m) {
-          const t = parseInt(m[1], 10) * 60 + parseInt(m[2], 10) + (m[3] ? parseInt(m[3], 10) / (10 ** m[3].length) : 0);
+          const t =
+            parseInt(m[1], 10) * 60 +
+            parseInt(m[2], 10) +
+            (m[3] ? parseInt(m[3], 10) / 10 ** m[3].length : 0);
           const text = m[4].trim();
           if (text) lines.push({ t, text });
         }
@@ -83,7 +148,9 @@
 
     function setStatus(text: string) {
       lyricEl.textContent = text;
-      nameEl.textContent = song ? `${song.name}${song.artist ? " · " + song.artist : ""}` : "随机热歌";
+      nameEl.textContent = song
+        ? `${song.name}${song.artist ? " · " + song.artist : ""}`
+        : "随机热歌";
     }
 
     function render() {
@@ -171,7 +238,11 @@
         return;
       }
       if (audio.paused) {
-        try { await audio.play(); } catch { /* ignore */ }
+        try {
+          await audio.play();
+        } catch {
+          /* ignore */
+        }
       } else {
         audio.pause();
       }
@@ -180,41 +251,100 @@
     }
 
     btnToggle.addEventListener("click", toggle);
-    root.querySelector("[data-music-prev]")?.addEventListener("click", () => { loadSong(true); startLyricLoop(); });
-    root.querySelector("[data-music-next]")?.addEventListener("click", () => { loadSong(true); startLyricLoop(); });
-    root.querySelector("[data-music-rand]")?.addEventListener("click", () => { loadSong(true); startLyricLoop(); });
+    root.querySelector("[data-music-prev]")?.addEventListener("click", () => {
+      loadSong(true);
+      startLyricLoop();
+    });
+    root.querySelector("[data-music-next]")?.addEventListener("click", () => {
+      loadSong(true);
+      startLyricLoop();
+    });
+    root.querySelector("[data-music-rand]")?.addEventListener("click", () => {
+      loadSong(true);
+      startLyricLoop();
+    });
 
-    audio.addEventListener("play", () => setPlayingUI(true));
+    audio.addEventListener("play", () => {
+      failures = 0;
+      setPlayingUI(true);
+    });
     audio.addEventListener("pause", () => setPlayingUI(false));
-    audio.addEventListener("ended", () => { loadSong(true); startLyricLoop(); });
+    audio.addEventListener("ended", () => {
+      loadSong(true);
+      startLyricLoop();
+    });
+    // A dead / blocked source used to bounce the pill between "换一首" and an
+    // error forever. Retry a couple of times, then stop and say so.
     audio.addEventListener("error", () => {
-      if (song) { lyricEl.textContent = "这首歌跑丢了，换一首…"; window.setTimeout(() => loadSong(true), 800); }
+      if (!song) return;
+      failures += 1;
+      if (failures > MAX_FAILURES) {
+        stopLyricLoop();
+        setPlayingUI(false);
+        lyricEl.textContent = "播放源不可用，稍后再点一次";
+        return;
+      }
+      lyricEl.textContent = `这首歌加载失败了，换一首…(${failures}/${MAX_FAILURES})`;
+      window.setTimeout(() => {
+        loadSong(true);
+        startLyricLoop();
+      }, 800 * failures);
     });
 
     // right-click menu on the pill
     root.addEventListener("contextmenu", e => {
       e.preventDefault();
       menu.hidden = false;
-      const mw = menu.offsetWidth, mh = menu.offsetHeight;
+      const mw = menu.offsetWidth,
+        mh = menu.offsetHeight;
       menu.style.left = `${Math.min(e.clientX, window.innerWidth - mw - 8)}px`;
       menu.style.top = `${Math.max(8, e.clientY - mh - 8)}px`;
     });
-    const closeMenu = () => (menu.hidden = true);
-    document.addEventListener("click", closeMenu);
-    document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
-    menu.querySelector("[data-menu-prev]")?.addEventListener("click", () => { loadSong(true); startLyricLoop(); });
-    menu.querySelector("[data-menu-next]")?.addEventListener("click", () => { loadSong(true); startLyricLoop(); });
-    menu.querySelector("[data-menu-copy]")?.addEventListener("click", async () => {
-      if (song) {
-        try { await navigator.clipboard.writeText(`${song.name} - ${song.artist}`.replace(/ - $/, "")); } catch { /* ignore */ }
-        const label = menu.querySelector("[data-menu-copy]") as HTMLElement;
-        const old = label.textContent;
-        label.textContent = "已复制 ✓";
-        window.setTimeout(() => (label.textContent = old), 1200);
-      }
+    // Bound on `document`, which survives navigation — so do it only once and
+    // target whatever menu is currently in the DOM. The flag lives on the
+    // document (not module scope) because the script module can be re-executed.
+    if (!(document as any).dataset.musicMenuBound) {
+      (document as any).dataset.musicMenuBound = "1";
+      const closeMenus = () =>
+        document
+          .querySelectorAll("[data-music-menu]")
+          .forEach(m => ((m as HTMLElement).hidden = true));
+      document.addEventListener("click", closeMenus);
+      document.addEventListener("keydown", e => {
+        if (e.key === "Escape") closeMenus();
+      });
+    }
+    menu.querySelector("[data-menu-prev]")?.addEventListener("click", () => {
+      loadSong(true);
+      startLyricLoop();
     });
+    menu.querySelector("[data-menu-next]")?.addEventListener("click", () => {
+      loadSong(true);
+      startLyricLoop();
+    });
+    menu
+      .querySelector("[data-menu-copy]")
+      ?.addEventListener("click", async () => {
+        if (song) {
+          try {
+            await navigator.clipboard.writeText(
+              `${song.name} - ${song.artist}`.replace(/ - $/, "")
+            );
+          } catch {
+            /* ignore */
+          }
+          const label = menu.querySelector("[data-menu-copy]") as HTMLElement;
+          const old = label.textContent;
+          label.textContent = "已复制 ✓";
+          window.setTimeout(() => (label.textContent = old), 1200);
+        }
+      });
   }
   initMusicPill();
+  // The site uses <ClientRouter />: every navigation swaps the DOM, so the pill
+  // rendered by the new page has no listeners at all. Without this re-bind the
+  // player works on first load and silently dies after the first navigation.
+  document.addEventListener("astro:page-load", initMusicPill);
 </script>
 
 <style>
@@ -264,8 +394,13 @@
   }
 
   @keyframes music-note-bounce {
-    0%, 100% { transform: rotate(-8deg) scale(1); }
-    50% { transform: rotate(8deg) scale(1.08); }
+    0%,
+    100% {
+      transform: rotate(-8deg) scale(1);
+    }
+    50% {
+      transform: rotate(8deg) scale(1.08);
+    }
   }
 
   .music-info {
@@ -298,8 +433,14 @@
   }
 
   @keyframes lyric-in {
-    from { opacity: 0.2; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0.2;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .music-ctrls {
@@ -321,7 +462,9 @@
     background: transparent;
     color: rgba(255, 255, 255, 0.88);
     cursor: pointer;
-    transition: background-color 0.2s ease, transform 0.15s ease;
+    transition:
+      background-color 0.2s ease,
+      transform 0.15s ease;
   }
 
   .music-btn:hover {
@@ -385,7 +528,9 @@
     color: var(--foreground);
     border-radius: 0.6rem;
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
   }
 
   .music-menu button:hover {
