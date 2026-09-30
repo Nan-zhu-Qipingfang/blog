@@ -1,0 +1,179 @@
+---
+/**
+ * Table of contents for the article page.
+ * Built on the client from the rendered headings inside #article, so anchor
+ * ids always match regardless of the slugger used at build time.
+ * Collapsible card; highlights the current section while scrolling.
+ */
+---
+
+{
+  <div
+    id="post-toc"
+    data-pagefind-ignore
+    class="relative mx-auto mt-8 w-full max-w-app overflow-hidden rounded-2xl border border-border/20 bg-muted/[0.06]"
+  >
+    <button
+      type="button"
+      id="toc-toggle"
+      class="flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-3.5 text-start"
+      aria-expanded="true"
+      aria-controls="toc-panel"
+    >
+      <span class="flex items-center gap-2.5">
+        <span
+          class="flex size-7 items-center justify-center rounded-lg bg-accent/10 text-accent"
+        >
+          <svg
+            class="size-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <line x1="8" y1="6" x2="21" y2="6" />
+            <line x1="8" y1="12" x2="21" y2="12" />
+            <line x1="8" y1="18" x2="21" y2="18" />
+            <line x1="3" y1="6" x2="3.01" y2="6" />
+            <line x1="3" y1="12" x2="3.01" y2="12" />
+            <line x1="3" y1="18" x2="3.01" y2="18" />
+          </svg>
+        </span>
+        <span class="text-sm font-semibold tracking-wide">文章目录</span>
+      </span>
+      <svg
+        id="toc-chevron"
+        class="size-4 text-foreground/40 transition-transform duration-300"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </button>
+
+    <div id="toc-panel" class="px-5 pb-4">
+      <nav aria-label="文章目录">
+        <ol id="toc-list" class="flex flex-col gap-0.5 border-l border-border/25" />
+      </nav>
+    </div>
+  </div>
+}
+
+<style>
+  #toc-list:empty + nav,
+  #toc-panel:has(#toc-list:empty) {
+    display: none;
+  }
+  #post-toc:has(#toc-list:empty) {
+    display: none;
+  }
+
+  .toc-item {
+    position: relative;
+    display: block;
+    margin-left: -1px;
+    border-left: 2px solid transparent;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: color-mix(in srgb, var(--foreground) 65%, transparent);
+    text-decoration: none;
+    transition:
+      color 0.2s ease,
+      border-color 0.2s ease,
+      background-color 0.2s ease;
+  }
+  .toc-item.toc-h3 {
+    padding-left: 1.6rem;
+    font-size: 0.8rem;
+  }
+  .toc-item:hover {
+    color: var(--color-accent);
+  }
+  .toc-item.toc-active {
+    border-left-color: var(--color-accent);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    color: var(--color-accent);
+    font-weight: 500;
+  }
+
+  #post-toc.collapsed #toc-panel {
+    display: none;
+  }
+  #post-toc.collapsed #toc-chevron {
+    transform: rotate(-90deg);
+  }
+</style>
+
+<script is:inline data-astro-rerun>
+  (function () {
+    const root = document.getElementById("post-toc");
+    const article = document.getElementById("article");
+    if (!root || !article) return;
+    const list = root.querySelector("#toc-list");
+    const toggle = root.querySelector("#toc-toggle");
+    if (!list || !toggle) return;
+
+    const headings = Array.from(article.querySelectorAll("h2[id], h3[id]"));
+    if (headings.length < 2) {
+      root.remove();
+      return;
+    }
+
+    // build items
+    const items = headings.map(h => {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = "#" + h.id;
+      a.textContent = h.textContent || "";
+      a.className = "toc-item " + (h.tagName === "H3" ? "toc-h3" : "toc-h2");
+      li.appendChild(a);
+      list.appendChild(li);
+      return a;
+    });
+
+    // collapse state (desktop starts expanded, mobile collapsed)
+    const setOpen = open => {
+      root.classList.toggle("collapsed", !open);
+      toggle.setAttribute("aria-expanded", String(open));
+    };
+    toggle.addEventListener("click", () =>
+      setOpen(toggle.getAttribute("aria-expanded") !== "true"),
+    );
+    setOpen(window.innerWidth >= 1024);
+
+    // scrollspy — rAF throttled, transform-free (classList only)
+    let ticking = false;
+    let activeIdx = -1;
+    const setActive = idx => {
+      if (idx === activeIdx) return;
+      if (activeIdx >= 0 && items[activeIdx]) items[activeIdx].classList.remove("toc-active");
+      activeIdx = idx;
+      if (idx >= 0 && items[idx]) items[idx].classList.add("toc-active");
+    };
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        const line = window.scrollY + 120;
+        let idx = -1;
+        for (let i = 0; i < headings.length; i++) {
+          if (headings[i].getBoundingClientRect().top + window.scrollY <= line) idx = i;
+          else break;
+        }
+        setActive(idx);
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  })();
+</script>

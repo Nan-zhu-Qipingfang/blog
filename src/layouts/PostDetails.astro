@@ -10,6 +10,8 @@ import Breadcrumb from "@/components/Breadcrumb.astro";
 import BackToTopButton from "@/components/BackToTopButton.astro";
 import GalleryEmbed from "@/components/GalleryEmbed.astro";
 import Comments from "@/components/Comments.astro";
+import AiSummary from "@/components/AiSummary.astro";
+import PostToc from "@/components/PostToc.astro";
 import { getPath } from "@/utils/getPath";
 import { slugifyStr } from "@/utils/slugify";
 import { getReadingTime } from "@/utils/readingTime";
@@ -81,6 +83,19 @@ const currentPostIndex = allPosts.findIndex(a => a.id === post.id);
 const prevPost = currentPostIndex !== 0 ? allPosts[currentPostIndex - 1] : null;
 const nextPost =
   currentPostIndex < allPosts.length - 1 ? allPosts[currentPostIndex + 1] : null;
+
+/* ========== Related posts (shared tags first) ========== */
+
+const relatedPosts = posts
+  .filter(p => p.id !== post.id && !p.data.draft)
+  .map(p => {
+    const shared = (p.data.tags ?? []).filter((t: string) => tags.includes(t)).length;
+    const time = new Date(p.data.pubDatetime ?? 0).getTime() || 0;
+    return { p, shared, time };
+  })
+  .sort((a, b) => b.shared - a.shared || b.time - a.time)
+  .slice(0, 3)
+  .map(x => x.p);
 ---
 
 <Layout {...layoutProps}>
@@ -201,6 +216,12 @@ const nextPost =
 
       </div>
     </header>
+
+    <!-- ═══════ AI summary ═══════ -->
+    <AiSummary summary={description} />
+
+    <!-- ═══════ Table of contents ═══════ -->
+    <PostToc />
 
     <article
       id="article"
@@ -325,6 +346,36 @@ const nextPost =
         )
       }
     </div>
+    <!-- ═══════ Related posts ═══════ -->
+    {
+      relatedPosts.length > 0 && (
+        <div data-pagefind-ignore class="mt-10">
+          <div class="mb-4 flex items-center gap-3">
+            <h2 class="text-base font-bold tracking-wide">相关文章</h2>
+            <div class="h-px flex-1 bg-linear-to-r from-border/40 to-transparent" />
+          </div>
+          <div class="grid gap-3 sm:grid-cols-3">
+            {relatedPosts.map(rp => (
+              <a
+                href={getPath(rp.id, rp.filePath)}
+                class="group flex flex-col gap-1.5 rounded-2xl border border-border/20 bg-muted/[0.04] px-4 py-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-lg hover:shadow-accent/5"
+              >
+                <span class="line-clamp-2 text-sm leading-snug font-medium text-foreground/80 transition-colors duration-200 group-hover:text-accent">
+                  {rp.data.title}
+                </span>
+                <span class="font-firacode text-[11px] text-foreground/40">
+                  <Datetime
+                    pubDatetime={rp.data.pubDatetime}
+                    size="sm"
+                    class="opacity-60 [&>svg]:hidden"
+                  />
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )
+    }
   </main>
   <BackToTopButton />
   <Footer />

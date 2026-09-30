@@ -4,11 +4,17 @@
  * Posts live in src/data/blog/*.md (content collection). Deleted posts are
  * moved to src/data/admin/trash/ (outside the collection glob) instead of
  * being destroyed.
+ *
+ * On serverless (Vercel KV configured) the filesystem is read-only, so saved
+ * posts/logs are persisted to KV instead; `scripts/sync-kv-content.mjs` runs
+ * at build time to pull KV posts back into src/data/blog/ before the static
+ * build, and a deploy hook can trigger that rebuild automatically.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
 import { BLOG_PATH } from "@/content.config";
+import { kvDel, kvEnabled, kvGet, kvKeys, kvSet } from "@/utils/kvStore";
 
 export const BLOG_DIR = path.resolve(BLOG_PATH);
 const ADMIN_DIR = path.resolve("src/data/admin");
@@ -81,13 +87,24 @@ function parsePostFile(fileName: string, raw: string): PostMeta | null {
 }
 
 export async function listPosts(): Promise<PostMeta[]> {
-  const entries = await fs.readdir(BLOG_DIR, { withFileTypes: true });
   const posts: PostMeta[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const raw = await fs.readFile(path.join(BLOG_DIR, entry.name), "utf-8");
-    const meta = parsePostFile(entry.name, raw);
-    if (meta) posts.push(meta);
+  if (kvEnabled) {
+    const keys = await kvKeys("blog:post:*");
+    for (const key of keys) {
+      const slug = key.replace("blog:post:", "");
+      const raw = await kvGet<string>(key, "");
+      if (!raw) continue;
+      const meta = parsePostFile(`${slug}.md`, raw);
+      if (meta) posts.push(meta);
+    }
+  } else {
+    const entries = await fs.readdir(BLOG_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const raw = await fs.readFile(path.join(BLOG_DIR, entry.name), "utf-8");
+      const meta = parsePostFile(entry.name, raw);
+      if (meta) posts.push(meta);
+    }
   }
   return posts.sort(
     (a, b) => new Date(b.pubDatetime).getTime() - new Date(a.pubDatetime).getTime(),
@@ -99,6 +116,14 @@ export async function getPost(
 ): Promise<{ slug: string; frontmatter: Record<string, unknown>; content: string } | null> {
   const safe = safeSlug(slug);
   if (!safe) return null;
+  if (kvEnabled) {
+    const raw = await kvGet<string>(`blog:post:${safe}`, "");
+    if (raw) {
+      const { data, content } = matter(raw);
+      return { slug: safe, frontmatter: data, content };
+    }
+    return null;
+  }
   for (const ext of [".md", ".mdx"]) {
     try {
       const raw = await fs.readFile(path.join(BLOG_DIR, safe + ext), "utf-8");
@@ -136,6 +161,16 @@ export async function savePost(input: {
   };
   const file = path.join(BLOG_DIR, `${slug}.md`);
   const body = `${buildFrontmatter(fm)}\n\n${input.content.replace(/\r\n/g, "\n").trim()}\n`;
+  if (kvEnabled) {
+    // Serverless: persist the markdown to KV; the build-time sync writes it
+    // back to src/data/blog/ so the next deploy publishes it.
+    await kvSet(`blog:post:${slug}`, body);
+    if (input.originalSlug) {
+      const old = safeSlug(input.originalSlug);
+      if (old && old !== slug) await kvDel(`blog:post:${old}`);
+    }
+    return { slug };
+  }
   await fs.mkdir(BLOG_DIR, { recursive: true });
   await fs.writeFile(file, body, "utf-8");
   // Renamed: remove the old file after writing the new one.
@@ -151,6 +186,13 @@ export async function savePost(input: {
 export async function trashPost(slug: string): Promise<boolean> {
   const safe = safeSlug(slug);
   if (!safe) return false;
+  if (kvEnabled) {
+    const exists = await kvGet<string>(`blog:post:${safe}`, "");
+    if (!exists) return false;
+    await kvSet(`blog:trash:${safe}`, new Date().toISOString());
+    await kvDel(`blog:post:${safe}`);
+    return true;
+  }
   for (const ext of [".md", ".mdx"]) {
     const from = path.join(BLOG_DIR, safe + ext);
     try {
@@ -168,31 +210,39 @@ export async function trashPost(slug: string): Promise<boolean> {
 
 export type LogEntry = { time: string; action: string; detail: string };
 
+const LOG_STORE = {
+  read: async (): Promise<LogEntry[]> => {
+    if (kvEnabled) return kvGet<LogEntry[]>("admin:logs", []);
+    try {
+      const logs = JSON.parse(await fs.readFile(LOG_FILE, "utf-8"));
+      return Array.isArray(logs) ? logs : [];
+    } catch {
+      return [];
+    }
+  },
+  write: async (logs: LogEntry[]): Promise<void> => {
+    if (kvEnabled) return kvSet("admin:logs", logs);
+    await fs.mkdir(ADMIN_DIR, { recursive: true });
+    await fs.writeFile(LOG_FILE, JSON.stringify(logs, null, 2), "utf-8");
+  },
+};
+
 export async function appendLog(action: string, detail: string): Promise<void> {
-  let logs: LogEntry[] = [];
   try {
-    logs = JSON.parse(await fs.readFile(LOG_FILE, "utf-8"));
-    if (!Array.isArray(logs)) logs = [];
+    const logs = await LOG_STORE.read();
+    logs.unshift({ time: new Date().toISOString(), action, detail });
+    await LOG_STORE.write(logs.slice(0, 200));
   } catch {
-    /* first entry */
+    // Logging must never break the actual operation (e.g. login).
   }
-  logs.unshift({ time: new Date().toISOString(), action, detail });
-  await fs.mkdir(ADMIN_DIR, { recursive: true });
-  await fs.writeFile(LOG_FILE, JSON.stringify(logs.slice(0, 200), null, 2), "utf-8");
 }
 
 export async function getLogs(): Promise<LogEntry[]> {
-  try {
-    const logs = JSON.parse(await fs.readFile(LOG_FILE, "utf-8"));
-    return Array.isArray(logs) ? logs : [];
-  } catch {
-    return [];
-  }
+  return LOG_STORE.read();
 }
 
 export async function clearLogs(): Promise<void> {
-  await fs.mkdir(ADMIN_DIR, { recursive: true });
-  await fs.writeFile(LOG_FILE, "[]", "utf-8");
+  await LOG_STORE.write([]);
 }
 
 export async function getStats() {

@@ -120,11 +120,46 @@ const { noMarginTop = false, class: className, ...attrs } = Astro.props;
         {SITE.title}. 保留所有权利.
       </p>
       <p class="font-firacode text-[11px] tracking-wide text-foreground/45">
-        用 <span class="text-accent">&#9829;</span> 和无数杯咖啡制作
+        <span
+          class="inline-flex items-center gap-1"
+          data-site-uptime
+          data-since={SITE.since ?? ""}
+        >
+          <span class="relative flex size-1.5" aria-hidden="true">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+            <span class="relative inline-flex size-1.5 rounded-full bg-accent" />
+          </span>
+          本站已运行 <span data-uptime-value>—</span>
+        </span>
       </p>
     </div>
   </div>
 </footer>
+
+<script is:inline data-astro-rerun>
+  // Footer uptime counter: "本站已运行 X 天 X 小时"
+  (function () {
+    const el = document.querySelector("[data-uptime-value]");
+    if (!el) return;
+    const since = el.closest("[data-site-uptime]")?.getAttribute("data-since");
+    const start = since ? new Date(since + "T00:00:00+08:00").getTime() : NaN;
+    if (Number.isNaN(start)) {
+      el.parentElement && (el.parentElement.style.display = "none");
+      return;
+    }
+    const render = () => {
+      const ms = Date.now() - start;
+      if (ms < 0) return;
+      const days = Math.floor(ms / 864e5);
+      const hours = Math.floor((ms % 864e5) / 36e5);
+      const minutes = Math.floor((ms % 36e5) / 6e4);
+      el.textContent =
+        `${days} 天 ${hours} 小时 ${minutes} 分`;
+    };
+    render();
+    setInterval(render, 3e4);
+  })();
+</script>
 
 <style>
   .footer-wrapper {

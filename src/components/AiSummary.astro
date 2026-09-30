@@ -1,0 +1,200 @@
+---
+/**
+ * AI summary card with typewriter playback, shown above the article body.
+ * Content comes from the post's frontmatter description; the typewriter
+ * effect gives the "AI generating" feel without any external API.
+ */
+export interface Props {
+  summary?: string;
+}
+const { summary } = Astro.props;
+const text = (summary ?? "").trim();
+---
+
+{
+  text && (
+    <div
+      id="ai-summary"
+      data-pagefind-ignore
+      class="relative mx-auto mt-8 w-full max-w-app overflow-hidden rounded-2xl border border-accent/15 bg-accent/[0.045] p-5 sm:p-6"
+    >
+      <!-- decorative corner glow -->
+      <div
+        class="pointer-events-none absolute -top-16 -right-16 size-40 rounded-full bg-accent/10 blur-3xl"
+        aria-hidden="true"
+      />
+
+      <div class="relative mb-3 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span
+            class="flex size-7 items-center justify-center rounded-lg bg-accent/10 text-accent"
+          >
+            <svg
+              class="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z" />
+              <path d="M5 3v4M19 17v4M3 5h4M17 19h4" />
+            </svg>
+          </span>
+          <span class="text-sm font-semibold tracking-wide">AI 摘要</span>
+          <span
+            class="ai-status font-firacode text-[11px] text-accent/70"
+            data-ai-status
+          >
+            生成中<span class="ai-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          </span>
+        </div>
+
+        <button
+          type="button"
+          id="ai-refresh"
+          class="flex size-8 cursor-pointer items-center justify-center rounded-lg text-foreground/40 transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
+          aria-label="重新生成摘要"
+          title="重新生成"
+        >
+          <svg
+            class="size-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 3v6h-6" />
+          </svg>
+        </button>
+      </div>
+
+      <p
+        class="relative min-h-[3.5rem] text-[0.925rem] leading-relaxed text-foreground/75"
+        data-ai-text
+        data-full={text}
+      />
+
+      <p class="mt-3 border-t border-border/10 pt-2.5 text-[11px] text-foreground/35">
+        此摘要由站点 AI 基于文章内容生成，仅供参考 · 点击右上角可重新生成
+      </p>
+    </div>
+  )
+}
+
+<style>
+  .ai-dots {
+    display: inline-flex;
+    gap: 3px;
+    margin-left: 4px;
+    vertical-align: 2px;
+  }
+  .ai-dots i {
+    width: 3px;
+    height: 3px;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.3;
+    animation: ai-dot 1.2s ease-in-out infinite;
+  }
+  .ai-dots i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .ai-dots i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+  @keyframes ai-dot {
+    0%,
+    100% {
+      opacity: 0.3;
+      transform: translateY(0);
+    }
+    40% {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+  }
+
+  /* blinking caret while typing */
+  [data-ai-text]::after {
+    content: "▍";
+    margin-left: 1px;
+    color: var(--color-accent);
+    opacity: 0;
+  }
+  [data-ai-text].typing::after {
+    opacity: 1;
+    animation: ai-caret 0.8s step-end infinite;
+  }
+  @keyframes ai-caret {
+    50% {
+      opacity: 0.2;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ai-dots i {
+      animation: none;
+    }
+  }
+</style>
+
+<script is:inline data-astro-rerun>
+  (function () {
+    const root = document.getElementById("ai-summary");
+    if (!root) return;
+    const textEl = root.querySelector("[data-ai-text]");
+    const statusEl = root.querySelector("[data-ai-status]");
+    const refreshBtn = root.querySelector("#ai-refresh");
+    if (!textEl) return;
+
+    const full = textEl.getAttribute("data-full") || "";
+    let timer = null;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function play(speed) {
+      if (timer) clearInterval(timer);
+      if (reduced || !full) {
+        textEl.textContent = full;
+        textEl.classList.remove("typing");
+        if (statusEl) statusEl.textContent = "已完成";
+        return;
+      }
+      let i = 0;
+      textEl.textContent = "";
+      textEl.classList.add("typing");
+      if (statusEl) statusEl.innerHTML = '生成中<span class="ai-dots"><i></i><i></i><i></i></span>';
+      timer = setInterval(() => {
+        // variable speed: 1-3 chars per tick feels like real streaming
+        i = Math.min(full.length, i + 1 + Math.floor(Math.random() * 2));
+        textEl.textContent = full.slice(0, i);
+        if (i >= full.length) {
+          clearInterval(timer);
+          timer = null;
+          textEl.classList.remove("typing");
+          if (statusEl) statusEl.textContent = "已完成";
+        }
+      }, speed);
+    }
+
+    // start when scrolled into view (fallback: immediately)
+    const io = new IntersectionObserver(
+      entries => {
+        if (entries.some(e => e.isIntersecting)) {
+          io.disconnect();
+          play(24);
+        }
+      },
+      { threshold: 0.3 },
+    );
+    io.observe(root);
+
+    refreshBtn?.addEventListener("click", () => play(14));
+  })();
+</script>

@@ -32,7 +32,7 @@
    | Output Directory | `dist` |
    | Node.js Version | `20.x`（或 22.x） |
 
-   > 说明：本项目的构建脚本为 `astro build && pagefind --site dist`，会在构建时一并生成站内全文搜索（Pagefind）索引，无需额外步骤。
+   > 说明：本项目的构建脚本为 `node scripts/sync-kv-content.mjs && astro build && pagefind --site dist`，构建前会把后台保存在 KV 的文章同步回内容目录，并生成站内全文搜索（Pagefind）索引。
 
 3. 先**不要急着点 Deploy**，先到下一步配置环境变量。
 4. 点击 **Deploy**，等待构建完成。首次构建约 1–3 分钟（受 npmmirror 镜像源网络影响可能稍慢，见第四节注意事项）。
@@ -57,6 +57,25 @@
 3. 变量添加后，**重新触发一次部署**（在 Deployments 里 Redeploy，或重新 push 一次），让环境变量生效。
 
 > 参考：仓库根目录的 `.env.example` 列出了全部可用变量及其含义。
+
+### 3.1 后台存储（KV）配置 —— 修复“登录一直显示网络错误，请重试”（强烈建议）
+
+**为什么之前会报错**：Vercel 的 Serverless Functions 文件系统是**只读**的，而旧版后台把账号、日志、评论等写在项目内的 JSON 文件里 → 登录流程一写文件就 500，前端只能显示“网络错误”。
+
+现在的方案：后台数据（管理员密码、操作日志、站内用户、评论、后台保存的文章）统一走 **KV 存储**（兼容 Vercel KV 与 Upstash Redis）。配置步骤：
+
+1. 进入 Vercel 项目 → **Storage** 标签 → **Create Database** → 选择 **Redis (Upstash)**（Hobby 免费套餐够用）。
+2. 创建后点击 **Connect to Project**，选择本项目并 **Connect** —— Vercel 会自动注入 `KV_REST_API_URL` 和 `KV_REST_API_TOKEN` 两个环境变量，**无需手动填写**。
+3. （可选，推荐）让“后台保存的文章自动发布上线”：
+   - 进入 **Settings → Git → Deploy Hooks**，随便起个名字（如 `admin-save`）和分支 `main`，创建后会得到一个形如 `https://api.vercel.com/v1/integrations/deploy/...` 的 URL；
+   - 把这个 URL 添加为环境变量 `DEPLOY_HOOK_URL`。
+   - 之后在后台保存/删除文章时会自动触发一次重新部署（构建前的同步脚本会把 KV 里的文章落盘），**约 1 分钟后文章自动上线**，全程不用碰 Git。
+4. 添加完成后 **Redeploy** 一次让配置生效。
+
+> 说明：
+> - 不配置 KV 时本地开发一切正常（自动回退到本地 JSON 文件），只是线上后台的数据无法持久化。
+> - 后台默认账号 `admin` / `admin12346`，登录后请立即在「设置」页修改密码（修改后的密码也保存在 KV 里）。
+> - KV 里的文章仅是“发布暂存区”，正式内容仍以 Git 仓库 `src/data/blog/*.md` 为准；同步脚本每次构建时把 KV 内容覆盖写入文件。
 
 ---
 

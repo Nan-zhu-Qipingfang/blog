@@ -15,7 +15,7 @@ if (await isAuthed(Astro.cookies)) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
-    <title>登录 · 清羽后台</title>
+    <title>登录 · 南烛后台</title>
     <script is:inline>
       (function () {
         const saved = localStorage.getItem("theme");
@@ -40,9 +40,9 @@ if (await isAuthed(Astro.cookies)) {
           <span
             class="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-accent/15 font-firacode text-base font-bold text-accent"
           >
-            LS
+            NZ
           </span>
-          <h1 class="text-lg font-bold">清羽后台</h1>
+          <h1 class="text-lg font-bold">南烛后台</h1>
           <p class="mt-1 text-xs text-foreground/50">Nanzhu's Blog 管理入口</p>
         </div>
 
@@ -80,9 +80,7 @@ if (await isAuthed(Astro.cookies)) {
         </form>
 
         <p class="mt-5 rounded-xl border border-border/50 bg-background/60 px-3.5 py-2.5 text-center text-[11px] leading-relaxed text-foreground/45">
-          本地演示默认账号 <code class="font-firacode text-accent/80">admin</code> · 密码
-          <code class="font-firacode text-accent/80">admin12346</code>（最后没有 5）<br />
-          可在登录后的「设置」页修改密码
+          默认账号 <code class="font-firacode text-accent/80">admin</code> · 登录后可在「设置」页修改密码
         </p>
       </div>
     </main>
@@ -104,7 +102,12 @@ if (await isAuthed(Astro.cookies)) {
               password: data.get("password"),
             }),
           });
-          const result = await response.json();
+          let result: { ok?: boolean; message?: string };
+          try {
+            result = await response.json();
+          } catch {
+            result = { ok: false, message: `服务器错误（HTTP ${response.status}）` };
+          }
           if (result.ok) {
             location.href = "/admin";
           } else {

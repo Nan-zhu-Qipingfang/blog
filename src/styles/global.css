@@ -3,6 +3,21 @@
 
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
+/* ─── Motion & performance guardrails ───
+   Honor the OS "reduce motion" setting: disable looping decorative
+   animations (background orbs, sparkles, wiggles) and shorten transitions.
+   Real interactions (menus, hovers) still work, they just snap. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 :root,
 html[data-theme="light"] {
   --background: #f2f5ec;
@@ -102,7 +117,7 @@ i {
   border-radius: 1rem;
   background: color-mix(in srgb, var(--foreground) 3%, var(--background));
   padding: 1rem 1rem 1rem 3.5rem;
-  transition: all 0.3s ease;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
   box-shadow: 0 4px 20px -5px color-mix(in srgb, var(--background) 50%, transparent);
 }
 
@@ -149,7 +164,7 @@ i {
   border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
   border-radius: 1rem;
   background: color-mix(in srgb, var(--foreground) 2%, var(--background));
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   margin-bottom: 1rem;
 }
 
@@ -191,7 +206,7 @@ i {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--accent);
   font-weight: 600;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .premium-search .pagefind-ui__button:hover {

@@ -194,13 +194,18 @@ const inputClass =
           content,
         }),
       });
-      const result = await response.json();
+      let result: { ok?: boolean; message?: string };
+      try {
+        result = await response.json();
+      } catch {
+        result = { ok: false, message: `服务器错误（HTTP ${response.status}）` };
+      }
       if (result.ok) {
-        status.textContent = "✓ 已保存";
+        status.textContent = "✓ 已保存，正在触发重新部署…";
         status.style.color = "var(--accent)";
         setTimeout(() => {
           location.href = "/admin/posts";
-        }, 600);
+        }, 900);
       } else {
         status.textContent = result.message ?? "保存失败";
         status.style.color = "var(--color-red-500, #ef4444)";

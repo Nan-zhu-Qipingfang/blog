@@ -1,14 +1,16 @@
 /**
- * Site users & comments storage (JSON files, same data dir as the admin store).
+ * Site users & comments storage (KV in production, JSON files in local dev).
  */
 import crypto from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
+import { jsonStore } from "@/utils/kvStore";
 
-const DATA_DIR = path.resolve("src/data/admin");
-const USERS_FILE = path.join(DATA_DIR, "users.json");
-const COMMENTS_FILE = path.join(DATA_DIR, "comments.json");
-const LINKS_FILE = path.join(DATA_DIR, "links.json");
+const USERS_FILE = "src/data/admin/users.json";
+const COMMENTS_FILE = "src/data/admin/comments.json";
+const LINKS_FILE = "src/data/admin/links.json";
+
+const USERS = jsonStore<SiteUser[]>(USERS_FILE, "site:users");
+const COMMENTS = jsonStore<SiteComment[]>(COMMENTS_FILE, "site:comments");
+const LINKS = jsonStore<PortalLink[]>(LINKS_FILE, "site:links");
 
 export interface SiteUser {
   id: string;
@@ -34,17 +36,12 @@ export interface PortalLink {
   url: string;
 }
 
-async function readJson<T>(file: string, fallback: T): Promise<T> {
-  try {
-    return JSON.parse(await fs.readFile(file, "utf-8")) as T;
-  } catch {
-    return fallback;
-  }
+async function readJson<T>(store: { read: <U>(fallback: U) => Promise<U> }, fallback: T): Promise<T> {
+  return store.read(fallback);
 }
 
-async function writeJson(file: string, data: unknown): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(file, JSON.stringify(data, null, 2), "utf-8");
+async function writeJson(store: { write: (data: unknown) => Promise<void> }, data: unknown): Promise<void> {
+  await store.write(data);
 }
 
 export function newId(): string {
@@ -54,7 +51,7 @@ export function newId(): string {
 /* ── Users ─────────────────────────────────────────────────────────────── */
 
 export async function listUsers(): Promise<SiteUser[]> {
-  return readJson<SiteUser[]>(USERS_FILE, []);
+  return readJson(USERS, []);
 }
 
 export async function findUserByEmail(email: string): Promise<SiteUser | undefined> {
@@ -83,7 +80,7 @@ export async function addUser(
     createdAt: new Date().toISOString(),
   };
   users.push(user);
-  await writeJson(USERS_FILE, users);
+  await writeJson(USERS, users);
   return user;
 }
 
@@ -91,7 +88,7 @@ export async function deleteUser(id: string): Promise<boolean> {
   const users = await listUsers();
   const next = users.filter(u => u.id !== id);
   if (next.length === users.length) return false;
-  await writeJson(USERS_FILE, next);
+  await writeJson(USERS, next);
   // also drop their comments? keep comments (community record) — just mark name
   return true;
 }
@@ -106,7 +103,7 @@ export function verifyUserPassword(user: SiteUser, password: string): boolean {
 /* ── Comments ──────────────────────────────────────────────────────────── */
 
 export async function listComments(slug?: string): Promise<SiteComment[]> {
-  const all = await readJson<SiteComment[]>(COMMENTS_FILE, []);
+  const all = await readJson(COMMENTS, []);
   const items = slug ? all.filter(c => c.slug === slug) : all;
   return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -117,7 +114,7 @@ export async function addComment(
   name: string,
   content: string,
 ): Promise<SiteComment> {
-  const all = await readJson<SiteComment[]>(COMMENTS_FILE, []);
+  const all = await readJson(COMMENTS, []);
   const comment: SiteComment = {
     id: newId(),
     slug,
@@ -127,15 +124,15 @@ export async function addComment(
     createdAt: new Date().toISOString(),
   };
   all.push(comment);
-  await writeJson(COMMENTS_FILE, all);
+  await writeJson(COMMENTS, all);
   return comment;
 }
 
 export async function deleteComment(id: string): Promise<boolean> {
-  const all = await readJson<SiteComment[]>(COMMENTS_FILE, []);
+  const all = await readJson(COMMENTS, []);
   const next = all.filter(c => c.id !== id);
   if (next.length === all.length) return false;
-  await writeJson(COMMENTS_FILE, next);
+  await writeJson(COMMENTS, next);
   return true;
 }
 
@@ -155,7 +152,7 @@ const DEFAULT_LINKS: PortalLink[] = [
 ];
 
 export async function getLinks(): Promise<PortalLink[]> {
-  const links = await readJson<PortalLink[]>(LINKS_FILE, []);
+  const links = await readJson(LINKS, []);
   return links.length ? links : DEFAULT_LINKS;
 }
 
@@ -164,5 +161,5 @@ export async function saveLinks(links: PortalLink[]): Promise<void> {
     .filter(l => l.name?.trim() && l.url?.trim())
     .slice(0, 12)
     .map(l => ({ name: l.name.trim(), url: l.url.trim() }));
-  await writeJson(LINKS_FILE, clean);
+  await writeJson(LINKS, clean);
 }
