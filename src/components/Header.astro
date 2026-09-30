@@ -56,8 +56,9 @@ const isActive = (path: string) => {
           <!-- Logo (NANZHU, split pieces reuse the original logo hover animations) -->
           <a
             href="/"
-            class="group relative z-20 flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl"
+            class="logo-link group relative z-20 flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl"
           >
+            <span class="logo-ripple" aria-hidden="true"></span>
             <span class="flex items-center">
               <span class="logo-sphere logo-rabbit inline-flex">
                 <img
@@ -273,55 +274,180 @@ const isActive = (path: string) => {
     max-width: 100%;
   }
 
-  /* ─── Logo SVG hover effects ─── */
+  /* ─── Logo：柔和悬停 / 按下反馈 / 点击起跳 ─── */
+  .logo-link {
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+    /* 松手用回弹曲线归位；按下时下面换成更快的 ease-out */
+    transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  /* 按下瞬间快速下沉，避免"点下去毫无反应"的生硬感 */
+  .logo-link:active {
+    transform: scale(0.94);
+    transition-duration: 0.1s;
+    transition-timing-function: ease-out;
+  }
+  .logo-link:focus-visible {
+    outline: none;
+  }
+  .logo-link:focus-visible .logo-ripple {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+
   :global(.logo-text-left),
   :global(.logo-text-right) {
     transition:
-      transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-      filter 0.4s ease;
+      transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+      filter 0.5s ease;
   }
   :global(.logo-sphere) {
     transition:
-      transform 0.3s ease,
-      filter 0.3s ease;
-    transform-origin: 342px 130px;
+      transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+      filter 0.4s ease;
+    transform-origin: 50% 62%;
   }
-  /* Rabbit piece reuses the sphere wiggle; pivot around its own body */
+  /* 兔子那一片按自身身体重心摆动 */
   .logo-rabbit {
     transform-origin: 30% 62%;
   }
 
-  .group:hover :global(.logo-text-left) {
-    transform: translateX(-5px);
-    filter: drop-shadow(0 0 3px rgba(56, 66, 77, 0.2));
+  /* 悬停：轻微分离 + 极缓呼吸（不再是一次性硬抖） */
+  .logo-link:hover :global(.logo-text-left) {
+    transform: translateX(-4px) rotate(-1.2deg);
+    filter: drop-shadow(0 1px 5px color-mix(in srgb, var(--accent) 35%, transparent));
   }
-  .group:hover :global(.logo-text-right) {
-    transform: translateX(5px);
-    filter: drop-shadow(0 0 3px rgba(56, 66, 77, 0.2));
+  .logo-link:hover :global(.logo-text-right) {
+    transform: translateX(4px) rotate(1.2deg);
+    filter: drop-shadow(0 1px 5px color-mix(in srgb, var(--accent) 35%, transparent));
   }
-  .group:hover :global(.logo-sphere) {
-    filter: drop-shadow(0 0 8px rgba(167, 90, 90, 0.5));
-    animation: sphere-wiggle 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  .logo-link:hover :global(.logo-sphere) {
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 45%, transparent));
+    animation: logo-breathe 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   }
 
-  @keyframes sphere-wiggle {
+  @keyframes logo-breathe {
+    0%,
+    100% {
+      transform: rotate(-2.5deg) scale(1);
+    }
+    50% {
+      transform: rotate(2.5deg) scale(1.045);
+    }
+  }
+
+  /* 点击：一圈涟漪从标识中心散开（双层错峰） */
+  .logo-ripple {
+    position: absolute;
+    left: 6%;
+    top: 50%;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-top: -1.25rem;
+    border-radius: 9999px;
+    border: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    opacity: 0;
+    transform: scale(0.4);
+    pointer-events: none;
+    transition:
+      opacity 0.3s ease,
+      transform 0.3s ease;
+  }
+  .logo-ripple::after {
+    content: "";
+    position: absolute;
+    inset: -0.35rem;
+    border-radius: 9999px;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .logo-link.is-launching .logo-ripple {
+    animation: logo-ripple 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .logo-link.is-launching .logo-ripple::after {
+    animation: logo-ripple 0.72s cubic-bezier(0.22, 1, 0.36, 1) 0.12s;
+  }
+
+  @keyframes logo-ripple {
     0% {
-      transform: rotate(0deg) scale(1);
+      opacity: 0.7;
+      transform: scale(0.35);
     }
-    20% {
-      transform: rotate(-8deg) scale(1.1);
-    }
-    40% {
-      transform: rotate(5deg) scale(1.15);
-    }
-    60% {
-      transform: rotate(-3deg) scale(1.12);
-    }
-    80% {
-      transform: rotate(1deg) scale(1.05);
+    70% {
+      opacity: 0.16;
     }
     100% {
-      transform: rotate(0deg) scale(1);
+      opacity: 0;
+      transform: scale(2.2);
+    }
+  }
+
+  /* 点击：兔子蓄力压扁 → 弹起拉伸 → 落回带余震
+     breathe 放在前面、hop 放后面：hop 期间覆盖呼吸，结束后自然接回呼吸 */
+  .logo-link.is-launching :global(.logo-sphere) {
+    animation:
+      logo-breathe 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite,
+      logo-hop 0.66s cubic-bezier(0.33, 1, 0.68, 1);
+  }
+  @keyframes logo-hop {
+    0% {
+      transform: translateY(0) scale(1, 1);
+    }
+    16% {
+      transform: translateY(2px) scale(1.14, 0.85);
+    }
+    44% {
+      transform: translateY(-7px) scale(0.93, 1.13) rotate(-5deg);
+    }
+    66% {
+      transform: translateY(1.5px) scale(1.09, 0.91) rotate(2.5deg);
+    }
+    85% {
+      transform: translateY(-2px) scale(0.97, 1.04) rotate(-1.2deg);
+    }
+    100% {
+      transform: translateY(0) scale(1, 1) rotate(0deg);
+    }
+  }
+
+  /* 点击：两侧文字先向内吸气、再弹开、最后柔和归位（anticipation → overshoot → settle） */
+  .logo-link.is-launching :global(.logo-text-left) {
+    animation: logo-part-left 0.66s cubic-bezier(0.33, 1, 0.68, 1);
+  }
+  .logo-link.is-launching :global(.logo-text-right) {
+    animation: logo-part-right 0.66s cubic-bezier(0.33, 1, 0.68, 1);
+  }
+  @keyframes logo-part-left {
+    0% {
+      transform: translateX(0) rotate(0deg);
+    }
+    20% {
+      transform: translateX(2px) rotate(1deg);
+    }
+    48% {
+      transform: translateX(-9px) rotate(-2.2deg);
+    }
+    74% {
+      transform: translateX(-3px) rotate(-0.6deg);
+    }
+    100% {
+      transform: translateX(0) rotate(0deg);
+    }
+  }
+  @keyframes logo-part-right {
+    0% {
+      transform: translateX(0) rotate(0deg);
+    }
+    20% {
+      transform: translateX(-2px) rotate(-1deg);
+    }
+    48% {
+      transform: translateX(9px) rotate(2.2deg);
+    }
+    74% {
+      transform: translateX(3px) rotate(0.6deg);
+    }
+    100% {
+      transform: translateX(0) rotate(0deg);
     }
   }
 
@@ -357,6 +483,28 @@ const isActive = (path: string) => {
   @media (prefers-reduced-motion: reduce) {
     .glide-pill {
       transition: opacity 0.2s ease;
+    }
+
+    /* Logo：关掉位移/弹跳，只保留极轻的透明度反馈 */
+    .logo-link {
+      transition: opacity 0.2s ease;
+    }
+    .logo-link:active {
+      transform: none;
+      opacity: 0.65;
+      transition-duration: 0.12s;
+    }
+    .logo-link:hover :global(.logo-sphere),
+    .logo-link.is-launching :global(.logo-sphere),
+    .logo-link.is-launching :global(.logo-text-left),
+    .logo-link.is-launching :global(.logo-text-right),
+    .logo-link.is-launching .logo-ripple,
+    .logo-link.is-launching .logo-ripple::after {
+      animation: none;
+    }
+    .logo-link:hover :global(.logo-text-left),
+    .logo-link:hover :global(.logo-text-right) {
+      transform: none;
     }
   }
 
@@ -581,6 +729,7 @@ const isActive = (path: string) => {
 <script>
   let headerCleanup: AbortController | null = null;
   let scrollCleanup: AbortController | null = null;
+  let logoCleanup: AbortController | null = null;
 
   function setupScrollPhysics() {
     if (scrollCleanup) scrollCleanup.abort();
@@ -717,15 +866,76 @@ const isActive = (path: string) => {
     }
   }
 
+  /**
+   * Logo 点击动效：
+   * 1) 按下由 CSS :active 负责（快速下沉，松手回弹）
+   * 2) 松手后播放一次「蓄力 → 弹起 → 落回」+ 涟漪
+   * 3) 已经在首页时不再硬跳刷新，改为平滑回到顶部
+   */
+  function setupLogoLaunch() {
+    if (logoCleanup) logoCleanup.abort();
+    logoCleanup = new AbortController();
+    const { signal } = logoCleanup;
+
+    const logo = document.querySelector<HTMLElement>(".logo-link");
+    if (!logo) return;
+
+    const LAUNCH_MS = 720;
+    let timer = 0;
+
+    const play = () => {
+      logo.classList.remove("is-launching");
+      // 强制重排，保证连点时动画能重新播放
+      void logo.offsetWidth;
+      logo.classList.add("is-launching");
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        logo.classList.remove("is-launching");
+      }, LAUNCH_MS);
+    };
+
+    logo.addEventListener(
+      "click",
+      event => {
+        // 新标签页打开 / 中键 / 右键：交给浏览器，不放动画
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+          return;
+
+        play();
+
+        // 当前就在首页：避免"点一下硬跳刷新"，改成柔和回到顶部
+        const path = location.pathname.replace(/\/+$/, "");
+        const isHome = path === "" || path === "/index.html";
+        if (!isHome) return;
+
+        event.preventDefault();
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+      },
+      { signal }
+    );
+
+    // 键盘触发（Enter）同样给一次反馈
+    logo.addEventListener(
+      "keydown",
+      event => {
+        if (event.key === "Enter" || event.key === " ") play();
+      },
+      { signal }
+    );
+  }
+
   // Initial load
   setupScrollPhysics();
   setupMobileNav();
   setupGlidePill();
+  setupLogoLaunch();
 
   // Runs on view transitions navigation
   document.addEventListener("astro:after-swap", () => {
     setupScrollPhysics();
     setupMobileNav();
     setupGlidePill();
+    setupLogoLaunch();
   });
 </script>
