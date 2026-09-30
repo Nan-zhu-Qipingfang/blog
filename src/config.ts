@@ -3,7 +3,7 @@ export const SITE = {
   author: "南烛",
   desc: "提供建站教程、编程实战笔记、生活点滴，个人经验，融合技术开发与人文思考，定期更新深度指南与创意灵感，给大家提供更多帮助。",
   title: "Nanzhu's Blog",
-  since: "2024-06-01", // site launch date, powers the footer uptime counter
+  since: "2021-01-01", // site launch date, powers the footer uptime counter
   ogImage: "devosfera-og.webp", // located in the public folder
   lightAndDarkMode: true,
   postPerIndex: 6,

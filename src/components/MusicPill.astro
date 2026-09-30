@@ -21,7 +21,7 @@
     </button>
     <button type="button" class="music-btn music-btn--main" data-music-toggle aria-label="播放" title="播放 / 暂停">
       <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-      <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" hidden><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+      <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
     </button>
     <button type="button" class="music-btn" data-music-next aria-label="下一首" title="下一首">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
@@ -62,8 +62,6 @@
     const nameEl = root.querySelector("[data-music-name]") as HTMLElement;
     const lyricEl = root.querySelector("[data-music-lyric]") as HTMLElement;
     const btnToggle = root.querySelector("[data-music-toggle]") as HTMLElement;
-    const iconPlay = btnToggle.querySelector(".icon-play") as SVGElement;
-    const iconPause = btnToggle.querySelector(".icon-pause") as SVGElement;
 
     type Song = { name: string; artist: string; url: string; pic: string; lrc: string; lines: { t: number; text: string }[] };
     let song: Song | null = null;
@@ -126,13 +124,15 @@
         lyricEl.textContent = "音乐服务打盹了，再点一次试试";
       } finally {
         loading = false;
+        setPlayingUI(!audio.paused);
       }
     }
 
     function setPlayingUI(playing: boolean) {
-      iconPlay.hidden = playing;
-      iconPause.hidden = !playing;
+      // Icons are swapped purely via the .is-playing class on the pill root
+      // (see styles) — do NOT use .hidden on the svg elements.
       root.classList.toggle("is-playing", playing);
+      btnToggle.setAttribute("aria-label", playing ? "暂停" : "播放");
     }
 
     function currentLyricLine(): string {
@@ -164,12 +164,19 @@
     }
 
     async function toggle() {
-      if (!song) { await loadSong(true); startLyricLoop(); return; }
+      if (!song) {
+        await loadSong(true);
+        startLyricLoop();
+        setPlayingUI(!audio.paused);
+        return;
+      }
       if (audio.paused) {
         try { await audio.play(); } catch { /* ignore */ }
       } else {
         audio.pause();
       }
+      // keep the icon in sync even if the play/pause event is delayed
+      setPlayingUI(!audio.paused);
     }
 
     btnToggle.addEventListener("click", toggle);
@@ -339,6 +346,20 @@
   .music-btn--main svg {
     width: 1.05rem;
     height: 1.05rem;
+  }
+
+  /* Play/pause icon swap, driven by .is-playing on the pill root.
+     IMPORTANT: this cannot use the `hidden` attribute — `hidden` is an HTML
+     attribute and has no effect on SVG elements, so setting el.hidden in JS
+     never reached the DOM and the icon stayed stuck on "play". */
+  .music-btn--main .icon-pause {
+    display: none;
+  }
+  .music-pill.is-playing .music-btn--main .icon-play {
+    display: none;
+  }
+  .music-pill.is-playing .music-btn--main .icon-pause {
+    display: block;
   }
 
   .music-menu {
