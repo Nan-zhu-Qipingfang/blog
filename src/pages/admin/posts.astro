@@ -26,16 +26,30 @@ if (!(await isAuthed(Astro.cookies))) {
           placeholder="搜索标题或标签…"
           class="w-44 rounded-xl border border-border bg-card/60 px-3.5 py-2 text-sm outline-none transition-colors focus:border-accent/60 sm:w-56"
         />
+        <button
+          id="import-btn"
+          type="button"
+          class="rounded-xl border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition-all duration-200 hover:-translate-y-0.5 hover:bg-accent/15 hover:shadow-md hover:shadow-accent/10 active:translate-y-0"
+        >
+          ⇪ 导入 MD
+        </button>
+        <input
+          id="import-input"
+          type="file"
+          multiple
+          accept=".md,.markdown,.mdx,.txt"
+          class="hidden"
+        />
         <a
           href="/admin/editor"
-          class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
+          class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white no-underline transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 hover:shadow-md hover:shadow-accent/25 active:translate-y-0"
         >
           + 新建
         </a>
       </div>
     </header>
 
-    <div class="overflow-hidden rounded-2xl border border-border/60 bg-card/60">
+    <div id="drop-zone" class="overflow-hidden rounded-2xl border border-border/60 bg-card/60 transition-all duration-200">
       <div class="overflow-x-auto">
         <table class="w-full min-w-[640px] text-left text-sm">
           <thead>
@@ -60,7 +74,77 @@ if (!(await isAuthed(Astro.cookies))) {
       删除的文章会移入
       <code class="font-firacode">src/data/admin/trash/</code>
       回收站，不会直接销毁；修改后的文章在开发模式下即时生效，生产部署需重新构建。
+      <br />
+      导入支持带 frontmatter 的 Markdown（title / tags / date / description / draft / featured），
+      也可以把 .md 文件<b>直接拖拽</b>到表格区域。
     </p>
+
+    <!-- ══════════ 导入预览弹窗 ══════════ -->
+    <div
+      id="import-modal"
+      class="fixed inset-0 z-50 hidden items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-modal-title"
+    >
+      <div class="import-backdrop absolute inset-0 bg-background/70 backdrop-blur-sm" data-import-close></div>
+      <div class="import-card relative w-full max-w-2xl overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-2xl">
+        <div class="import-shimmer" aria-hidden="true"></div>
+        <div class="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 id="import-modal-title" class="text-base font-bold">导入 Markdown 文件</h2>
+            <p class="mt-0.5 text-xs text-foreground/45">
+              确认下方解析结果后导入，导入后会自动触发重新部署
+            </p>
+          </div>
+          <button
+            type="button"
+            class="rounded-lg px-2 py-1 text-sm text-foreground/40 transition-colors hover:bg-foreground/5 hover:text-foreground"
+            data-import-close
+            aria-label="关闭"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div id="import-list" class="max-h-72 space-y-2 overflow-y-auto pr-1"></div>
+
+        <label class="mt-4 flex cursor-pointer items-center gap-2 text-xs text-foreground/60 select-none">
+          <input id="import-overwrite" type="checkbox" class="accent-[var(--accent)]" />
+          覆盖已存在的同名文章（slug 相同）
+        </label>
+
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <span id="import-summary" class="mr-auto text-xs text-foreground/40"></span>
+          <button
+            type="button"
+            class="rounded-xl px-4 py-2 text-sm text-foreground/60 transition-colors hover:bg-foreground/5"
+            data-import-close
+          >
+            取消
+          </button>
+          <button
+            id="import-confirm"
+            type="button"
+            class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            开始导入
+          </button>
+        </div>
+
+        <div id="import-progress" class="mt-3 hidden">
+          <div class="h-1 w-full overflow-hidden rounded-full bg-foreground/10">
+            <div class="import-progress-bar h-full w-0 rounded-full bg-accent transition-all duration-300"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 轻提示 -->
+    <div
+      id="import-toast"
+      class="pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 translate-y-4 rounded-xl border border-border/60 bg-card px-4 py-2.5 text-sm opacity-0 shadow-xl transition-all duration-300"
+    ></div>
   </div>
 </AdminLayout>
 
@@ -166,5 +250,383 @@ if (!(await isAuthed(Astro.cookies))) {
     if (response.ok) loadPosts();
   });
 
+  // 让导入流程结束后能刷新列表
+  window.addEventListener("posts:refresh", () => loadPosts());
+
   loadPosts();
 </script>
+
+<script>
+  /* ══════════ Markdown 导入 ══════════ */
+  type Pending = {
+    name: string;
+    content: string;
+    title: string;
+    tags: string[];
+    date: string;
+    slug: string;
+    draft: boolean;
+    checked: boolean;
+    conflict: boolean;
+  };
+
+  const MAX_BYTES = 2 * 1024 * 1024;
+
+  const importBtn = document.getElementById("import-btn") as HTMLElement | null;
+  const fileInput = document.getElementById("import-input") as HTMLInputElement | null;
+  const modal = document.getElementById("import-modal") as HTMLElement | null;
+  const listEl = document.getElementById("import-list") as HTMLElement | null;
+  const confirmBtn = document.getElementById("import-confirm") as HTMLButtonElement | null;
+  const overwriteEl = document.getElementById("import-overwrite") as HTMLInputElement | null;
+  const progressWrap = document.getElementById("import-progress") as HTMLElement | null;
+  const progressBar = document.querySelector(".import-progress-bar") as HTMLElement | null;
+  const summaryEl = document.getElementById("import-summary") as HTMLElement | null;
+  const toastEl = document.getElementById("import-toast") as HTMLElement | null;
+  const dropZone = document.getElementById("drop-zone") as HTMLElement | null;
+
+  let pending: Pending[] = [];
+  let existingSlugs = new Set<string>();
+
+  function esc(text: string): string {
+    return String(text)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  }
+
+  function slugify(input: string): string {
+    return input
+      .trim()
+      .toLowerCase()
+      .replace(/\.(md|markdown|mdx|txt)$/i, "")
+      .replace(/[^\p{Script=Han}\p{L}\p{N}]+/gu, "-")
+      .replace(/^-+|-+$/g, "")
+      .replace(/-{2,}/g, "-");
+  }
+
+  /** 粗略解析 frontmatter，仅用于导入前的预览（服务端会做权威解析） */
+  function parseFrontmatter(text: string) {
+    const clean = text.replace(/^﻿/, "");
+    const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(clean);
+    const data: Record<string, string> = {};
+    if (!match) return { data, content: clean };
+    for (const line of match[1].split(/\r?\n/)) {
+      const kv = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(line);
+      if (!kv) continue;
+      let value = kv[2].trim().replace(/^['"]|['"]$/g, "");
+      if (value.startsWith("[") && value.endsWith("]")) value = value.slice(1, -1);
+      data[kv[1]] = value;
+    }
+    return { data, content: clean.slice(match[0].length) };
+  }
+
+  async function loadExistingSlugs() {
+    try {
+      const res = await fetch("/api/admin/posts");
+      const data = await res.json();
+      existingSlugs = new Set<string>(
+        ((data.posts ?? []) as { slug: string }[]).map(p => String(p.slug)),
+      );
+    } catch {
+      existingSlugs = new Set<string>();
+    }
+  }
+
+  function renderList() {
+    if (!listEl) return;
+    listEl.innerHTML = "";
+    pending.forEach((item, index) => {
+      const row = document.createElement("div");
+      row.className = "import-row";
+      row.style.animationDelay = `${Math.min(index * 45, 400)}ms`;
+      const status = item.conflict
+        ? '<span class="import-badge import-badge--warn">slug 已存在</span>'
+        : '<span class="import-badge import-badge--new">新建</span>';
+      row.innerHTML = `
+        <label class="flex gap-3 rounded-xl border border-border/40 bg-muted/10 p-3 transition-colors hover:border-accent/40">
+          <input type="checkbox" class="import-check mt-1 accent-[var(--accent)]" ${item.checked ? "checked" : ""} data-index="${index}" />
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="truncate text-sm font-semibold">${esc(item.title)}</span>
+              ${status}
+            </div>
+            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-foreground/45">
+              <span class="font-firacode truncate">${esc(item.name)}</span>
+              <span class="font-firacode">/${esc(item.slug)}</span>
+              ${item.date ? `<span>${esc(item.date)}</span>` : ""}
+              ${item.tags.length ? `<span>${item.tags.map(t => `#${esc(t)}`).join(" ")}</span>` : ""}
+            </div>
+          </div>
+        </label>`;
+      listEl.appendChild(row);
+    });
+
+    listEl.querySelectorAll<HTMLInputElement>(".import-check").forEach(box => {
+      box.addEventListener("change", () => {
+        const idx = Number(box.dataset.index);
+        pending[idx].checked = box.checked;
+        updateSummary();
+      });
+    });
+    updateSummary();
+  }
+
+  function updateSummary() {
+    if (!summaryEl || !confirmBtn) return;
+    const chosen = pending.filter(p => p.checked).length;
+    summaryEl.textContent = pending.length
+      ? `已选 ${chosen} / ${pending.length} 个文件`
+      : "";
+    confirmBtn.disabled = chosen === 0;
+  }
+
+  function openModal() {
+    if (!modal) return;
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+  }
+
+  function closeModal() {
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+    if (progressWrap) progressWrap.classList.add("hidden");
+    if (progressBar) progressBar.style.width = "0%";
+  }
+
+  function toast(message: string) {
+    if (!toastEl) return;
+    toastEl.textContent = message;
+    toastEl.classList.remove("opacity-0", "translate-y-4");
+    toastEl.classList.add("opacity-100", "translate-y-0");
+    window.setTimeout(() => {
+      toastEl.classList.add("opacity-0", "translate-y-4");
+      toastEl.classList.remove("opacity-100", "translate-y-0");
+    }, 3600);
+  }
+
+  async function prepare(files: File[]) {
+    const usable = files.filter(f => /\.(md|markdown|mdx|txt)$/i.test(f.name));
+    if (usable.length === 0) {
+      toast("请选择 .md / .markdown 文件");
+      return;
+    }
+
+    await loadExistingSlugs();
+
+    const loaded: Pending[] = [];
+    for (const file of usable) {
+      const text = await file.text();
+      if (file.size > MAX_BYTES) {
+        toast(`${file.name} 超过 2MB，已跳过`);
+        continue;
+      }
+      const { data, content } = parseFrontmatter(text);
+      const slug = slugify(data.slug || file.name) || slugify(data.title || file.name);
+      loaded.push({
+        name: file.name,
+        content: text,
+        title: data.title || file.name.replace(/\.(md|markdown|mdx|txt)$/i, ""),
+        tags: (data.tags || data.categories || "")
+          .split(/[,，、\s]+/)
+          .map(t => t.trim())
+          .filter(Boolean),
+        date: (data.date || data.pubDatetime || "").slice(0, 10),
+        slug,
+        draft: /^true$/i.test(data.draft || ""),
+        checked: true,
+        conflict: existingSlugs.has(slug),
+      });
+    }
+
+    if (loaded.length === 0) return;
+    pending = loaded;
+    renderList();
+    openModal();
+  }
+
+  confirmBtn?.addEventListener("click", async () => {
+    const chosen = pending.filter(p => p.checked);
+    if (chosen.length === 0) return;
+    const overwrite = Boolean(overwriteEl?.checked);
+
+    confirmBtn.disabled = true;
+    progressWrap?.classList.remove("hidden");
+    if (progressBar) progressBar.style.width = "18%";
+
+    try {
+      const response = await fetch("/api/admin/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          overwrite,
+          files: chosen.map(p => ({ name: p.name, content: p.content })),
+        }),
+      });
+      if (progressBar) progressBar.style.width = "70%";
+      const result = await response.json();
+      if (!response.ok) throw new Error(result?.message || `HTTP ${response.status}`);
+
+      const results = (result.results ?? []) as {
+        status: string;
+        name: string;
+        message?: string;
+      }[];
+      const created = results.filter(r => r.status === "created").length;
+      const updated = results.filter(r => r.status === "updated").length;
+      const skipped = results.filter(r => r.status === "skipped").length;
+      const failed = results.filter(r => r.status === "error");
+      if (progressBar) progressBar.style.width = "100%";
+
+      const parts = [`导入完成：新建 ${created}、覆盖 ${updated}`];
+      if (skipped) parts.push(`跳过 ${skipped}`);
+      if (failed.length) parts.push(`失败 ${failed.length}（${failed[0].message ?? ""}）`);
+      toast(parts.join("，"));
+
+      window.dispatchEvent(new CustomEvent("posts:refresh"));
+      window.setTimeout(closeModal, 500);
+    } catch (error) {
+      toast(`导入失败：${String((error as Error).message ?? error)}`);
+    } finally {
+      confirmBtn.disabled = false;
+    }
+  });
+
+  importBtn?.addEventListener("click", () => fileInput?.click());
+
+  fileInput?.addEventListener("change", () => {
+    const files = Array.from(fileInput.files ?? []);
+    if (files.length) prepare(files);
+    fileInput.value = "";
+  });
+
+  modal?.querySelectorAll("[data-import-close]").forEach(el => {
+    el.addEventListener("click", closeModal);
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && modal && !modal.classList.contains("hidden")) closeModal();
+  });
+
+  /* 拖拽导入 */
+  ["dragenter", "dragover"].forEach(type => {
+    dropZone?.addEventListener(type, e => {
+      e.preventDefault();
+      dropZone.classList.add("drag-over");
+    });
+  });
+  ["dragleave", "drop"].forEach(type => {
+    dropZone?.addEventListener(type, e => {
+      e.preventDefault();
+      if (type === "dragleave" && dropZone.contains((e as DragEvent).relatedTarget as Node))
+        return;
+      dropZone.classList.remove("drag-over");
+    });
+  });
+  dropZone?.addEventListener("drop", e => {
+    const files = Array.from((e as DragEvent).dataTransfer?.files ?? []);
+    if (files.length) prepare(files);
+  });
+</script>
+
+<style>
+  @reference "../../styles/global.css";
+
+  #drop-zone.drag-over {
+    border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+
+  .import-card {
+    animation: import-pop 0.34s cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+  @keyframes import-pop {
+    from {
+      opacity: 0;
+      transform: translateY(14px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .import-backdrop {
+    animation: import-fade 0.24s ease;
+  }
+  @keyframes import-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* 顶部一道缓慢扫过的高光，和站内其它卡片的动效语言保持一致 */
+  .import-shimmer {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--border) 20%, transparent);
+  }
+  .import-shimmer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 38%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--accent) 70%, transparent),
+      transparent
+    );
+    animation: import-sweep 3.2s ease-in-out infinite;
+  }
+  @keyframes import-sweep {
+    0% {
+      transform: translateX(-130%);
+    }
+    55%,
+    100% {
+      transform: translateX(340%);
+    }
+  }
+
+  .import-row {
+    animation: import-row-in 0.32s ease both;
+  }
+  @keyframes import-row-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .import-badge {
+    @apply rounded-md px-1.5 py-0.5 text-[10px] font-medium;
+  }
+  .import-badge--new {
+    @apply bg-accent/15 text-accent;
+  }
+  .import-badge--warn {
+    @apply bg-amber-500/15 text-amber-600 dark:text-amber-400;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .import-card,
+    .import-row,
+    .import-shimmer::after {
+      animation: none;
+    }
+  }
+</style>

@@ -1,9 +1,13 @@
 ---
 /**
- * ConsolePanel — top-right console button that pops a panel with site
- * stats, a tag cloud and the latest comments.
+ * ConsolePanel — top-right console button that pops a mini dashboard with
+ * site stats (animated counters), the most recent posts, a tag cloud and the
+ * latest comments. Visual language follows blog.liushen.com's dashboard cards:
+ * spring entrance, count-up numbers, shimmer while loading.
  */
 import { getCollection } from "astro:content";
+import { SITE } from "@/config";
+import { getPath } from "@/utils/getPath";
 
 const posts = await getCollection("blog");
 const tagMap = new Map<string, number>();
@@ -13,26 +17,56 @@ for (const post of posts) {
   }
 }
 const tags = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+const recent = posts
+  .filter(p => !p.data.draft)
+  .sort(
+    (a, b) =>
+      new Date(b.data.pubDatetime ?? 0).getTime() -
+      new Date(a.data.pubDatetime ?? 0).getTime(),
+  )
+  .slice(0, 3)
+  .map(p => ({
+    href: getPath(p.id, p.filePath),
+    title: p.data.title,
+    date: new Date(p.data.pubDatetime ?? 0).toISOString().slice(0, 10),
+  }));
+
+const since = SITE.since ?? "2021-01-01";
 ---
 
 <div class="console-wrap" data-console-wrap>
-  <button type="button" class="console-btn" data-console-btn aria-label="打开控制台" title="控制台">
+  <button
+    type="button"
+    class="console-btn"
+    data-console-btn
+    aria-label="打开控制台"
+    aria-expanded="false"
+    aria-controls="console-panel"
+    title="控制台"
+  >
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="4 17 10 11 4 5"></polyline>
       <line x1="12" y1="19" x2="20" y2="19"></line>
     </svg>
   </button>
 
-  <div class="console-panel" data-console-panel hidden>
-    <p class="console-heading">控制台</p>
+  <div class="console-panel" id="console-panel" data-console-panel hidden>
+    <div class="console-shimmer" aria-hidden="true"></div>
+
+    <div class="console-head">
+      <span class="console-dot"></span>
+      <p class="console-heading">控制台</p>
+      <span class="console-uptime" data-console-uptime data-since={since}>—</span>
+    </div>
 
     <div class="console-stats">
       <div class="console-stat">
-        <span class="console-stat-num">{posts.length}</span>
+        <span class="console-stat-num" data-count-to={posts.length}>0</span>
         <span class="console-stat-label">文章</span>
       </div>
       <div class="console-stat">
-        <span class="console-stat-num">{tagMap.size}</span>
+        <span class="console-stat-num" data-count-to={tagMap.size}>0</span>
         <span class="console-stat-label">标签</span>
       </div>
       <div class="console-stat">
@@ -41,6 +75,21 @@ const tags = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
       </div>
     </div>
 
+    <p class="console-sub">最近更新</p>
+    <ul class="console-recent">
+      {
+        recent.map(post => (
+          <li>
+            <a class="console-recent-link" href={post.href}>
+              <span class="console-recent-title">{post.title}</span>
+              <span class="console-recent-date">{post.date}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+
+    <p class="console-sub">标签云</p>
     <div class="console-tags">
       {tags.map(([tag, n]) => (
         <a class="console-tag" href={`/tags/${tag}/`}>{tag}<sup>{n}</sup></a>
@@ -49,12 +98,35 @@ const tags = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
 
     <p class="console-sub">最近评论</p>
     <ul class="console-comments" data-console-comments>
-      <li class="console-empty">暂无评论</li>
+      <li class="console-skeleton"></li>
+      <li class="console-skeleton"></li>
     </ul>
   </div>
 </div>
 
 <script>
+  /** Animate 0 → target with an ease-out curve. */
+  function countUp(el: HTMLElement, target: number) {
+    const duration = 700;
+    const start = performance.now();
+    const step = (now: number) => {
+      const p = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = String(Math.round(target * eased));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  function formatUptime(since: string) {
+    const start = new Date(since).getTime();
+    if (Number.isNaN(start)) return "—";
+    const diff = Math.max(Date.now() - start, 0);
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    return `${days} 天 ${hours} 小时`;
+  }
+
   function initConsole() {
     document.querySelectorAll("[data-console-wrap]").forEach(wrap => {
       if ((wrap as HTMLElement).dataset.init) return;
@@ -63,23 +135,34 @@ const tags = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
       const panel = wrap.querySelector("[data-console-panel]") as HTMLElement;
       const list = wrap.querySelector("[data-console-comments]") as HTMLElement;
       const countEl = wrap.querySelector("[data-console-comment-count]") as HTMLElement;
+      const uptimeEl = wrap.querySelector("[data-console-uptime]") as HTMLElement;
+
+      const setOpen = (open: boolean) => {
+        panel.hidden = !open;
+        btn.setAttribute("aria-expanded", String(open));
+        if (open) {
+          // counters replay every time the panel opens — that's the point
+          panel.querySelectorAll<HTMLElement>("[data-count-to]").forEach(el => {
+            countUp(el, Number(el.dataset.countTo ?? 0));
+          });
+          if (uptimeEl) uptimeEl.textContent = formatUptime(uptimeEl.dataset.since ?? "");
+        }
+      };
 
       btn.addEventListener("click", async e => {
         e.stopPropagation();
         const willOpen = panel.hidden;
-        panel.hidden = !willOpen;
-        if (willOpen && (list as HTMLElement).dataset.loaded !== "1") {
+        setOpen(willOpen);
+        if (willOpen && list.dataset.loaded !== "1") {
           try {
             const res = await fetch("/api/comments/recent");
             const j = await res.json();
-            const comments = j.comments ?? [];
-            countEl.textContent = String(comments.length > 0 ? `8+`.slice(0, comments.length >= 8 ? 2 : 1) : "0");
-            // precise count endpoint is admin-only; show "N" of what we know
+            const comments = (j.comments ?? []) as { name: string; content: string }[];
             countEl.textContent = comments.length >= 8 ? "8+" : String(comments.length);
             list.innerHTML = comments.length
               ? comments
                   .map(
-                    (c: any) => `
+                    c => `
                     <li class="console-comment">
                       <span class="console-comment-name">${c.name}</span>
                       <span class="console-comment-text">${c.content.slice(0, 42)}${c.content.length > 42 ? "…" : ""}</span>
@@ -87,7 +170,7 @@ const tags = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
                   )
                   .join("")
               : `<li class="console-empty">暂无评论</li>`;
-            (list as HTMLElement).dataset.loaded = "1";
+            list.dataset.loaded = "1";
           } catch {
             list.innerHTML = `<li class="console-empty">加载失败</li>`;
           }
@@ -95,10 +178,10 @@ const tags = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
       });
 
       document.addEventListener("click", e => {
-        if (!panel.hidden && !wrap.contains(e.target as Node)) panel.hidden = true;
+        if (!panel.hidden && !wrap.contains(e.target as Node)) setOpen(false);
       });
       document.addEventListener("keydown", e => {
-        if (e.key === "Escape") panel.hidden = true;
+        if (e.key === "Escape") setOpen(false);
       });
     });
   }
@@ -118,17 +201,99 @@ const tags = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
   .console-btn svg {
     @apply size-5;
   }
+  .console-btn[aria-expanded="true"] {
+    @apply bg-accent/12 text-accent;
+  }
+  .console-btn[aria-expanded="true"] svg {
+    animation: console-icon-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes console-icon-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    55% {
+      opacity: 0.55;
+    }
+  }
+
   .console-panel {
-    @apply absolute top-12 right-0 z-50 w-72 rounded-2xl border border-border/20 bg-background/95 p-4 shadow-xl shadow-foreground/10 backdrop-blur-md;
+    @apply absolute top-12 right-0 z-50 w-80 rounded-2xl border border-border/20 p-4 shadow-xl shadow-foreground/10 backdrop-blur-md;
+    background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+    transform-origin: top right;
+    animation: console-in 0.32s cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+  @keyframes console-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.94);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* top hairline with a slow travelling highlight */
+  .console-shimmer {
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px overflow-hidden;
+    background: color-mix(in srgb, var(--border) 18%, transparent);
+  }
+  .console-shimmer::after {
+    content: "";
+    @apply absolute inset-y-0 left-0;
+    width: 34%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--accent) 70%, transparent),
+      transparent
+    );
+    animation: console-sweep 3.6s ease-in-out infinite;
+  }
+  @keyframes console-sweep {
+    0% {
+      transform: translateX(-120%);
+    }
+    55%,
+    100% {
+      transform: translateX(330%);
+    }
+  }
+
+  .console-head {
+    @apply flex items-center gap-2;
+  }
+  .console-dot {
+    @apply size-1.5 shrink-0 rounded-full bg-accent;
+    box-shadow: 0 0 6px var(--accent);
+    animation: console-dot 2.4s ease-in-out infinite;
+  }
+  @keyframes console-dot {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
   }
   .console-heading {
     @apply font-firacode text-[10px] tracking-widest text-foreground/40 uppercase select-none;
   }
+  .console-uptime {
+    @apply ml-auto font-firacode text-[10px] text-foreground/35;
+  }
+
   .console-stats {
     @apply mt-2 grid grid-cols-3 gap-2;
   }
   .console-stat {
-    @apply flex flex-col items-center rounded-xl bg-muted/20 py-2;
+    @apply flex flex-col items-center rounded-xl py-2 transition-colors duration-200;
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+  .console-stat:hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
   .console-stat-num {
     @apply font-firacode text-base font-bold text-accent;
@@ -136,23 +301,42 @@ const tags = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
   .console-stat-label {
     @apply text-[10px] text-foreground/45;
   }
+
+  .console-sub {
+    @apply mt-3 mb-1 font-firacode text-[10px] tracking-widest text-foreground/40 uppercase select-none;
+  }
+
+  .console-recent {
+    @apply m-0 flex list-none flex-col gap-1 p-0;
+  }
+  .console-recent-link {
+    @apply flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 no-underline transition-all duration-200 hover:bg-accent/8 hover:pl-2.5;
+  }
+  .console-recent-title {
+    @apply truncate text-[11px] text-foreground/70;
+  }
+  .console-recent-link:hover .console-recent-title {
+    @apply text-accent;
+  }
+  .console-recent-date {
+    @apply shrink-0 font-firacode text-[10px] text-foreground/30;
+  }
+
   .console-tags {
-    @apply mt-3 flex flex-wrap gap-1.5;
+    @apply mt-1 flex flex-wrap gap-1.5;
   }
   .console-tag {
-    @apply rounded-full border border-border/20 px-2.5 py-1 text-[11px] text-foreground/65 no-underline transition-colors hover:border-accent/40 hover:bg-accent/10 hover:text-accent;
+    @apply rounded-full border border-border/20 px-2.5 py-1 text-[11px] text-foreground/65 no-underline transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/40 hover:bg-accent/10 hover:text-accent;
   }
   .console-tag sup {
     @apply ml-0.5 text-[9px] text-accent/70;
-  }
-  .console-sub {
-    @apply mt-3 mb-1 font-firacode text-[10px] tracking-widest text-foreground/40 uppercase select-none;
   }
   .console-comments {
     @apply m-0 flex max-h-40 list-none flex-col gap-1.5 overflow-y-auto p-0;
   }
   .console-comment {
-    @apply flex flex-col rounded-lg bg-muted/15 px-2.5 py-1.5;
+    @apply flex flex-col rounded-lg px-2.5 py-1.5;
+    background: color-mix(in srgb, var(--muted) 15%, transparent);
   }
   .console-comment-name {
     @apply text-[11px] font-semibold text-foreground/75;
@@ -162,5 +346,35 @@ const tags = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
   }
   .console-empty {
     @apply py-1 text-xs text-foreground/35;
+  }
+
+  /* loading placeholder */
+  .console-skeleton {
+    @apply h-8 rounded-lg;
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--muted) 15%, transparent) 25%,
+      color-mix(in srgb, var(--muted) 30%, transparent) 37%,
+      color-mix(in srgb, var(--muted) 15%, transparent) 63%
+    );
+    background-size: 400% 100%;
+    animation: console-shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes console-shimmer {
+    0% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0 50%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .console-panel,
+    .console-dot,
+    .console-shimmer::after,
+    .console-btn[aria-expanded="true"] svg {
+      animation: none;
+    }
   }
 </style>

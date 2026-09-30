@@ -13,6 +13,8 @@
     class="portal-btn"
     data-portal-btn
     aria-label="快捷导航"
+    aria-expanded="false"
+    aria-controls="portal-panel"
     title="快捷导航"
   >
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
@@ -60,10 +62,17 @@
     </svg>
   </button>
 
-  <div class="portal-panel" data-portal-panel hidden>
+  <div class="portal-panel" id="portal-panel" data-portal-panel hidden>
+    <div class="portal-shimmer" aria-hidden="true"></div>
     <p class="portal-heading">快捷导航</p>
     <div class="portal-grid" data-portal-list>
-      <span class="portal-loading">加载中…</span>
+      <span class="portal-skeleton"></span>
+      <span class="portal-skeleton"></span>
+      <span class="portal-skeleton"></span>
+    </div>
+    <div class="portal-foot">
+      <a class="portal-manage" href="/admin/settings">管理导航</a>
+      <span class="portal-count" data-portal-count></span>
     </div>
   </div>
 </div>
@@ -201,11 +210,17 @@
       const btn = nav.querySelector("[data-portal-btn]") as HTMLElement;
       const panel = nav.querySelector("[data-portal-panel]") as HTMLElement;
       const list = nav.querySelector("[data-portal-list]") as HTMLElement;
+      const countEl = nav.querySelector("[data-portal-count]") as HTMLElement;
+
+      const setOpen = (open: boolean) => {
+        panel.hidden = !open;
+        btn.setAttribute("aria-expanded", String(open));
+      };
 
       btn.addEventListener("click", async e => {
         e.stopPropagation();
         const willOpen = panel.hidden;
-        panel.hidden = !willOpen;
+        setOpen(willOpen);
         if (willOpen && (list as HTMLElement).dataset.loaded !== "1") {
           try {
             const res = await fetch("/api/portal-links");
@@ -217,13 +232,15 @@
             const cols = Math.min(Math.max(links.length, 1), 3);
             list.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
 
-            links.forEach(l => {
+            links.forEach((l, index) => {
               const a = document.createElement("a");
               a.className = "portal-item";
               a.href = l.url;
               a.target = "_blank";
               a.rel = "noopener noreferrer";
               a.title = l.name;
+              // 逐项错峰入场
+              a.style.animationDelay = `${Math.min(index * 40, 320)}ms`;
 
               const chip = document.createElement("span");
               chip.className = "portal-icon";
@@ -238,6 +255,7 @@
               a.append(chip, label);
               list.appendChild(a);
             });
+            if (countEl) countEl.textContent = `${links.length} 项`;
             (list as HTMLElement).dataset.loaded = "1";
           } catch {
             list.textContent = "";
@@ -250,10 +268,10 @@
       });
 
       document.addEventListener("click", e => {
-        if (!panel.hidden && !nav.contains(e.target as Node)) panel.hidden = true;
+        if (!panel.hidden && !nav.contains(e.target as Node)) setOpen(false);
       });
       document.addEventListener("keydown", e => {
-        if (e.key === "Escape") panel.hidden = true;
+        if (e.key === "Escape") setOpen(false);
       });
     });
   }
@@ -272,6 +290,10 @@
     @apply inline-flex size-8 items-center justify-center rounded-full text-foreground/55 transition-all duration-300 hover:bg-accent/10 hover:text-accent;
   }
 
+  .portal-btn[aria-expanded="true"] {
+    @apply bg-accent/12 text-accent;
+  }
+
   /* gradient stops can't read CSS vars from attributes — style them here */
   .portal-btn .fp-stop-main {
     stop-color: currentColor;
@@ -281,7 +303,46 @@
   }
 
   .portal-panel {
-    @apply absolute top-10 left-0 z-50 w-56 rounded-2xl border border-border/20 bg-background/95 p-3 shadow-xl shadow-foreground/10 backdrop-blur-md;
+    @apply absolute top-10 left-0 z-50 w-60 rounded-2xl border border-border/20 p-3 shadow-xl shadow-foreground/10 backdrop-blur-md;
+    background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+    transform-origin: top left;
+    animation: portal-in 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+  @keyframes portal-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.94);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .portal-shimmer {
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px overflow-hidden;
+    background: color-mix(in srgb, var(--border) 18%, transparent);
+  }
+  .portal-shimmer::after {
+    content: "";
+    @apply absolute inset-y-0 left-0;
+    width: 34%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--accent) 70%, transparent),
+      transparent
+    );
+    animation: portal-sweep 3.6s ease-in-out infinite;
+  }
+  @keyframes portal-sweep {
+    0% {
+      transform: translateX(-120%);
+    }
+    55%,
+    100% {
+      transform: translateX(330%);
+    }
   }
 
   .portal-heading {
@@ -295,15 +356,41 @@
 
   .portal-item {
     @apply flex flex-col items-center gap-1.5 rounded-xl px-1 py-2 no-underline transition-colors duration-200 hover:bg-accent/8;
+    animation: portal-item-in 0.34s cubic-bezier(0.34, 1.35, 0.64, 1) both;
+  }
+  @keyframes portal-item-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   .portal-icon {
-    @apply flex size-9 items-center justify-center rounded-[10px] transition-transform duration-300;
+    @apply relative flex size-9 items-center justify-center rounded-[10px] transition-transform duration-300;
     background: color-mix(in srgb, var(--icon-tint, var(--accent)) 15%, transparent);
     color: var(--icon-tint, var(--accent));
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.16),
       0 1px 2px color-mix(in srgb, var(--icon-tint, var(--accent)) 18%, transparent);
+  }
+
+  /* hover 时向外扩散的一圈光环（只动 opacity/scale，不重排） */
+  .portal-icon::after {
+    content: "";
+    @apply pointer-events-none absolute inset-0 rounded-[10px];
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--icon-tint, var(--accent)) 45%, transparent);
+    opacity: 0;
+    transition:
+      opacity 0.3s ease,
+      box-shadow 0.3s ease;
+  }
+  .portal-item:hover .portal-icon::after {
+    opacity: 1;
+    box-shadow: 0 0 0 5px transparent;
   }
 
   .portal-item:hover .portal-icon {
@@ -318,7 +405,46 @@
     @apply text-accent;
   }
 
+  .portal-foot {
+    @apply mt-2 flex items-center justify-between border-t border-border/20 pt-2;
+  }
+  .portal-manage {
+    @apply font-firacode text-[10px] tracking-wider text-foreground/40 uppercase no-underline transition-colors hover:text-accent;
+  }
+  .portal-count {
+    @apply font-firacode text-[10px] text-foreground/30;
+  }
+
   .portal-loading {
     @apply px-1 py-2 text-xs text-foreground/35;
+  }
+
+  .portal-skeleton {
+    @apply h-16 rounded-xl;
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--muted) 15%, transparent) 25%,
+      color-mix(in srgb, var(--muted) 30%, transparent) 37%,
+      color-mix(in srgb, var(--muted) 15%, transparent) 63%
+    );
+    background-size: 400% 100%;
+    animation: portal-skeleton 1.4s ease-in-out infinite;
+  }
+  @keyframes portal-skeleton {
+    0% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0 50%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .portal-panel,
+    .portal-item,
+    .portal-skeleton,
+    .portal-shimmer::after {
+      animation: none;
+    }
   }
 </style>
