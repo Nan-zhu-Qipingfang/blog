@@ -12,6 +12,7 @@ import {
 } from "@shikijs/transformers";
 import { transformerFileName } from "./src/utils/transformers/fileName";
 import { rehypeTerminalCodeBlock } from "./src/utils/rehype/terminalCodeBlock.js";
+import remarkAnzhiyuTags from "./src/plugins/remark-anzhiyu-tags";
 import { SITE } from "./src/config";
 
 // https://astro.build/config
@@ -36,7 +37,12 @@ export default defineConfig({
     }),
   ],
   markdown: {
-    remarkPlugins: [remarkToc, [remarkCollapse, { test: "Table of contents" }]],
+    remarkPlugins: [
+      remarkToc,
+      [remarkCollapse, { test: "Table of contents" }],
+      // 安知鱼（hexo-theme-anzhiyu）外挂标签：audio / video / videos / tip / hide*
+      remarkAnzhiyuTags,
+    ],
     rehypePlugins: [rehypeTerminalCodeBlock],
     shikiConfig: {
       // For more themes, visit https://shiki.style/themes

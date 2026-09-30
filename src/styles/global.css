@@ -91,6 +91,238 @@ main#main-content {
   padding-inline: 1.25rem;
 }
 
+/* ─── 外挂标签（对标 hexo-theme-anzhiyu 的 scripts/tag + _tags/*.styl）───
+   文章里可以直接写 {% audio url %} / {% video url %} / {% videos 对齐,列数 %}
+   等标签，由 src/plugins/remark-anzhiyu-tags.ts 转成下面的结构。 */
+
+audio,
+video {
+  border-radius: 4px;
+  max-width: 100%;
+}
+
+video {
+  transition: all 0.28s ease;
+}
+video:hover {
+  box-shadow:
+    0 4px 8px 0 rgba(0, 0, 0, 0.24),
+    0 8px 16px 0 rgba(0, 0, 0, 0.24);
+}
+
+div.audio,
+div.video {
+  line-height: 0;
+  text-align: center;
+  margin: 1rem 0;
+}
+
+/* 多视频并排容器：{% videos center,2 %} */
+div.videos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: flex-end;
+  margin: 1em 0 -4px;
+}
+div.videos > .video,
+div.videos > iframe {
+  width: 100%;
+  margin: 4px;
+}
+div.videos > iframe {
+  border-radius: 4px;
+  min-height: 300px;
+}
+div.videos.left {
+  justify-content: flex-start;
+}
+div.videos.center {
+  justify-content: center;
+}
+div.videos.right {
+  justify-content: flex-end;
+}
+div.videos.stretch {
+  align-items: stretch;
+}
+div.videos[col="2"] > .video,
+div.videos[col="2"] > iframe {
+  width: calc(50% - 8px);
+}
+div.videos[col="3"] > .video,
+div.videos[col="3"] > iframe {
+  width: calc(33.33% - 8px);
+}
+div.videos[col="4"] > .video,
+div.videos[col="4"] > iframe {
+  width: calc(25% - 8px);
+}
+
+/* 提示条：{% tip info %} … {% endtip %} */
+.tip {
+  position: relative;
+  padding: 6px 20px;
+  margin: 0 0 20px;
+  color: #fff;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #41363c, #494648);
+  box-shadow: 0 3px 5px rgba(50, 50, 50, 0.5);
+}
+.tip p {
+  margin: 0 !important;
+  padding: 0.5rem 0;
+}
+.tip ol {
+  margin: 0;
+}
+.tip a {
+  color: #e6eaed;
+}
+/* 主题用的是图标字体，这里换成 Unicode 字形，避免缺字体变豆腐块 */
+.tip::before {
+  content: "·";
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
+  left: -12px;
+  top: -12px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  background: linear-gradient(0deg, #41363c, #494648);
+  box-shadow: 0 0 0 2.5px var(--background);
+}
+.tip.info,
+.tip.primary {
+  background: linear-gradient(90deg, #20a0ff, #20b8ff);
+  box-shadow: 0 3px 5px rgba(32, 160, 255, 0.5);
+}
+.tip.info::before {
+  content: "i";
+  background: linear-gradient(0deg, #0092ff, #20b8ff);
+}
+.tip.success {
+  background: linear-gradient(90deg, #61be33, #8fce44);
+  box-shadow: 0 3px 5px rgba(104, 195, 59, 0.5);
+}
+.tip.success::before {
+  content: "\2713";
+  background: linear-gradient(0deg, #52bb1d, #95d34b);
+}
+.tip.warning {
+  background: linear-gradient(90deg, #ff953f, #ffb449);
+  box-shadow: 0 3px 5px rgba(255, 154, 73, 0.5);
+}
+.tip.warning::before {
+  content: "!";
+  background: linear-gradient(0deg, #ff8f35, #ffc149);
+}
+.tip.error,
+.tip.danger,
+.tip.ban {
+  background: linear-gradient(90deg, #ff4949, #ff7849);
+  box-shadow: 0 3px 5px rgba(255, 73, 73, 0.5);
+}
+.tip.error::before,
+.tip.danger::before,
+.tip.ban::before {
+  content: "\2715";
+  background: linear-gradient(0deg, #ff3838, #ff7849);
+}
+.tip.bolt {
+  background: linear-gradient(530deg, #78ca33, #25822c);
+}
+.tip.bolt::before {
+  content: "\26A1";
+  background: linear-gradient(776deg, #78ca33, #25822c);
+}
+.tip.home::before {
+  content: "\2302";
+}
+.tip.sync::before {
+  content: "\21BB";
+}
+.tip.cogs::before {
+  content: "\2699";
+}
+.tip.key::before {
+  content: "\1F511";
+}
+.tip.bell::before {
+  content: "\1F514";
+}
+
+/* 折叠隐藏：{% hideInline %} / {% hideBlock %} / {% hideToggle %} */
+.hide-inline > .hide-cb {
+  display: none;
+}
+.hide-inline > .hide-button {
+  display: inline-block;
+  padding: 5px 18px;
+  margin: 0 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #fff;
+  background: var(--accent);
+  transition: background-color 0.2s ease;
+}
+.hide-inline > .hide-button:hover {
+  background: color-mix(in srgb, var(--accent) 80%, #000);
+}
+.hide-inline > .hide-content {
+  display: none;
+  margin: 0 6px;
+}
+/* 纯 CSS 开关：勾上后隐藏按钮、显示内容 */
+.hide-inline > .hide-cb:checked + .hide-button {
+  display: none;
+}
+.hide-inline > .hide-cb:checked ~ .hide-content {
+  display: inline;
+}
+
+.hide-block {
+  margin: 0 0 16px;
+}
+.hide-block > .hide-button {
+  display: inline-block;
+  padding: 5px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #fff;
+  background: var(--accent);
+}
+.hide-block > .hide-content {
+  margin-top: 12px;
+}
+
+.toggle {
+  margin: 0 0 20px;
+  border: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.toggle > .toggle-button {
+  padding: 6px 15px;
+  cursor: pointer;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+}
+.toggle > .toggle-content {
+  margin: 30px 24px;
+}
+
+/* 深色模式下媒体与提示条降亮度，与主题保持一致 */
+html[data-theme="dark"] audio,
+html[data-theme="dark"] video,
+html[data-theme="dark"] .tip {
+  filter: brightness(0.7);
+}
+
 .italic,
 .prose em,
 em,

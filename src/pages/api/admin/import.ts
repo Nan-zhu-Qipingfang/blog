@@ -4,6 +4,7 @@ import type { APIRoute } from "astro";
 import matter from "gray-matter";
 import { isAuthed } from "@/utils/adminAuth";
 import { appendLog, getPost, savePost } from "@/utils/adminStore";
+import { slugify } from "@/utils/slug";
 
 const unauthorized = () =>
   new Response(JSON.stringify({ ok: false, message: "未登录" }), {
@@ -32,31 +33,23 @@ type IncomingFile = { name?: unknown; content?: unknown };
 function toIsoDate(value: unknown): string {
   if (!value) return new Date().toISOString();
   if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? new Date().toISOString() : value.toISOString();
+    return Number.isNaN(value.getTime())
+      ? new Date().toISOString()
+      : value.toISOString();
   }
   const raw = String(value).trim();
   if (!raw) return new Date().toISOString();
   // Astro/yaml may parse "YYYY-MM-DD" into a Date already; plain strings like
   // "2024/06/01 10:00" need a nudge. Fall back to now on anything unparsable.
   const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
-}
-
-/** Turn a filename / title into a URL-safe slug. */
-function slugify(input: string): string {
-  const base = input
-    .trim()
-    .toLowerCase()
-    .replace(/\.(md|markdown|mdx|txt)$/i, "")
-    // keep CJK, letters, digits; everything else becomes a dash
-    .replace(/[^\p{Script=Han}\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
-  return base;
+  return Number.isNaN(parsed.getTime())
+    ? new Date().toISOString()
+    : parsed.toISOString();
 }
 
 function toStringList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);
+  if (Array.isArray(value))
+    return value.map(v => String(v).trim()).filter(Boolean);
   if (typeof value === "string") {
     return value
       .split(/[,，、\s]+/)
@@ -82,7 +75,8 @@ export const POST: APIRoute = async Astro => {
   }
 
   const files = Array.isArray(body.files) ? (body.files as IncomingFile[]) : [];
-  if (files.length === 0) return json({ ok: false, message: "没有待导入的文件" }, 400);
+  if (files.length === 0)
+    return json({ ok: false, message: "没有待导入的文件" }, 400);
   const overwrite = Boolean(body.overwrite);
 
   const results: {
@@ -98,11 +92,23 @@ export const POST: APIRoute = async Astro => {
     try {
       const raw = String(file?.content ?? "");
       if (!raw.trim()) {
-        results.push({ name, slug: "", title: "", status: "error", message: "文件为空" });
+        results.push({
+          name,
+          slug: "",
+          title: "",
+          status: "error",
+          message: "文件为空",
+        });
         continue;
       }
       if (Buffer.byteLength(raw, "utf8") > MAX_BYTES) {
-        results.push({ name, slug: "", title: "", status: "error", message: "文件超过 2MB" });
+        results.push({
+          name,
+          slug: "",
+          title: "",
+          status: "error",
+          message: "文件超过 2MB",
+        });
         continue;
       }
 
@@ -111,20 +117,34 @@ export const POST: APIRoute = async Astro => {
       const fm = (parsed.data ?? {}) as Record<string, unknown>;
       const content = parsed.content.trim();
 
+      // 标题保留原文（中文就中文），只有 slug 才转拼音
       const title =
-        String(fm.title ?? "").trim() || slugify(name).replace(/-/g, " ") || name;
+        String(fm.title ?? "").trim() ||
+        name.replace(/\.(md|markdown|mdx|txt)$/i, "") ||
+        name;
       const description = String(
         fm.description ?? fm.desc ?? fm.summary ?? fm.subtitle ?? ""
       ).trim();
-      const tags = toStringList(fm.tags ?? fm.tag ?? fm.categories ?? fm.category);
-      const pubDatetime = toIsoDate(fm.pubDatetime ?? fm.date ?? fm.published ?? fm.created);
+      const tags = toStringList(
+        fm.tags ?? fm.tag ?? fm.categories ?? fm.category
+      );
+      const pubDatetime = toIsoDate(
+        fm.pubDatetime ?? fm.date ?? fm.published ?? fm.created
+      );
       const modDatetime = fm.modDatetime ?? fm.updated ?? fm.lastmod ?? null;
       const draft = Boolean(fm.draft ?? false);
       const featured = Boolean(fm.featured ?? fm.sticky ?? false);
 
-      const wantedSlug = slugify(String(fm.slug ?? "").trim() || name) || slugify(title);
+      const wantedSlug =
+        slugify(String(fm.slug ?? "").trim() || name) || slugify(title);
       if (!wantedSlug) {
-        results.push({ name, slug: "", title, status: "error", message: "无法生成 slug" });
+        results.push({
+          name,
+          slug: "",
+          title,
+          status: "error",
+          message: "无法生成 slug",
+        });
         continue;
       }
 

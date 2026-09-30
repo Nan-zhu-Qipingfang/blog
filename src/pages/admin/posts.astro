@@ -24,7 +24,7 @@ if (!(await isAuthed(Astro.cookies))) {
           id="search"
           type="search"
           placeholder="搜索标题或标签…"
-          class="w-44 rounded-xl border border-border bg-card/60 px-3.5 py-2 text-sm outline-none transition-colors focus:border-accent/60 sm:w-56"
+          class="bg-card/60 w-44 rounded-xl border border-border px-3.5 py-2 text-sm transition-colors outline-none focus:border-accent/60 sm:w-56"
         />
         <button
           id="import-btn"
@@ -49,7 +49,10 @@ if (!(await isAuthed(Astro.cookies))) {
       </div>
     </header>
 
-    <div id="drop-zone" class="overflow-hidden rounded-2xl border border-border/60 bg-card/60 transition-all duration-200">
+    <div
+      id="drop-zone"
+      class="bg-card/60 overflow-hidden rounded-2xl border border-border/60 transition-all duration-200"
+    >
       <div class="overflow-x-auto">
         <table class="w-full min-w-[640px] text-left text-sm">
           <thead>
@@ -65,8 +68,11 @@ if (!(await isAuthed(Astro.cookies))) {
           <tbody id="post-rows"></tbody>
         </table>
       </div>
-      <p id="empty-tip" class="hidden px-4 py-10 text-center text-sm text-foreground/40">
-          没有匹配的文章
+      <p
+        id="empty-tip"
+        class="hidden px-4 py-10 text-center text-sm text-foreground/40"
+      >
+        没有匹配的文章
       </p>
     </div>
 
@@ -75,8 +81,8 @@ if (!(await isAuthed(Astro.cookies))) {
       <code class="font-firacode">src/data/admin/trash/</code>
       回收站，不会直接销毁；修改后的文章在开发模式下即时生效，生产部署需重新构建。
       <br />
-      导入支持带 frontmatter 的 Markdown（title / tags / date / description / draft / featured），
-      也可以把 .md 文件<b>直接拖拽</b>到表格区域。
+      导入支持带 frontmatter 的 Markdown（title / tags / date / description / draft
+      / featured）， 也可以把 .md 文件<b>直接拖拽</b>到表格区域。
     </p>
 
     <!-- ══════════ 导入预览弹窗 ══════════ -->
@@ -87,12 +93,20 @@ if (!(await isAuthed(Astro.cookies))) {
       aria-modal="true"
       aria-labelledby="import-modal-title"
     >
-      <div class="import-backdrop absolute inset-0 bg-background/70 backdrop-blur-sm" data-import-close></div>
-      <div class="import-card relative w-full max-w-2xl overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-2xl">
+      <div
+        class="import-backdrop absolute inset-0 bg-background/70 backdrop-blur-sm"
+        data-import-close
+      >
+      </div>
+      <div
+        class="import-card bg-card relative w-full max-w-2xl overflow-hidden rounded-2xl border border-border/60 p-5 shadow-2xl"
+      >
         <div class="import-shimmer" aria-hidden="true"></div>
         <div class="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 id="import-modal-title" class="text-base font-bold">导入 Markdown 文件</h2>
+            <h2 id="import-modal-title" class="text-base font-bold">
+              导入 Markdown 文件
+            </h2>
             <p class="mt-0.5 text-xs text-foreground/45">
               确认下方解析结果后导入，导入后会自动触发重新部署
             </p>
@@ -107,15 +121,23 @@ if (!(await isAuthed(Astro.cookies))) {
           </button>
         </div>
 
-        <div id="import-list" class="max-h-72 space-y-2 overflow-y-auto pr-1"></div>
+        <div id="import-list" class="max-h-72 space-y-2 overflow-y-auto pr-1">
+        </div>
 
-        <label class="mt-4 flex cursor-pointer items-center gap-2 text-xs text-foreground/60 select-none">
-          <input id="import-overwrite" type="checkbox" class="accent-[var(--accent)]" />
+        <label
+          class="mt-4 flex cursor-pointer items-center gap-2 text-xs text-foreground/60 select-none"
+        >
+          <input
+            id="import-overwrite"
+            type="checkbox"
+            class="accent-[var(--accent)]"
+          />
           覆盖已存在的同名文章（slug 相同）
         </label>
 
         <div class="mt-4 flex items-center justify-end gap-2">
-          <span id="import-summary" class="mr-auto text-xs text-foreground/40"></span>
+          <span id="import-summary" class="mr-auto text-xs text-foreground/40"
+          ></span>
           <button
             type="button"
             class="rounded-xl px-4 py-2 text-sm text-foreground/60 transition-colors hover:bg-foreground/5"
@@ -134,7 +156,10 @@ if (!(await isAuthed(Astro.cookies))) {
 
         <div id="import-progress" class="mt-3 hidden">
           <div class="h-1 w-full overflow-hidden rounded-full bg-foreground/10">
-            <div class="import-progress-bar h-full w-0 rounded-full bg-accent transition-all duration-300"></div>
+            <div
+              class="import-progress-bar h-full w-0 rounded-full bg-accent transition-all duration-300"
+            >
+            </div>
           </div>
         </div>
       </div>
@@ -143,8 +168,9 @@ if (!(await isAuthed(Astro.cookies))) {
     <!-- 轻提示 -->
     <div
       id="import-toast"
-      class="pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 translate-y-4 rounded-xl border border-border/60 bg-card px-4 py-2.5 text-sm opacity-0 shadow-xl transition-all duration-300"
-    ></div>
+      class="bg-card pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 translate-y-4 rounded-xl border border-border/60 px-4 py-2.5 text-sm opacity-0 shadow-xl transition-all duration-300"
+    >
+    </div>
   </div>
 </AdminLayout>
 
@@ -180,7 +206,7 @@ if (!(await isAuthed(Astro.cookies))) {
       ? allPosts.filter(
           post =>
             post.title.toLowerCase().includes(key) ||
-            post.tags.some(tag => tag.toLowerCase().includes(key)),
+            post.tags.some(tag => tag.toLowerCase().includes(key))
         )
       : allPosts;
 
@@ -199,7 +225,8 @@ if (!(await isAuthed(Astro.cookies))) {
           : "",
       ].join("");
       const tr = document.createElement("tr");
-      tr.className = "border-b border-border/30 transition-colors last:border-0 hover:bg-accent/5";
+      tr.className =
+        "border-b border-border/30 transition-colors last:border-0 hover:bg-accent/5";
       tr.innerHTML = `
         <td class="max-w-[260px] px-4 py-3">
           <a class="block truncate font-medium no-underline transition-colors hover:text-accent" href="/posts/${post.slug}" target="_blank" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a>
@@ -232,23 +259,35 @@ if (!(await isAuthed(Astro.cookies))) {
     allPosts = result.posts ?? [];
     const count = document.getElementById("post-count");
     if (count) count.textContent = String(allPosts.length);
-    render((document.getElementById("search") as HTMLInputElement)?.value ?? "");
+    render(
+      (document.getElementById("search") as HTMLInputElement)?.value ?? ""
+    );
   }
 
   document.getElementById("search")?.addEventListener("input", event => {
     render((event.target as HTMLInputElement).value);
   });
 
-  document.getElementById("post-rows")?.addEventListener("click", async event => {
-    const target = event.target as HTMLElement;
-    const slug = target.getAttribute("data-delete");
-    if (!slug) return;
-    if (!confirm(`确定删除《${target.getAttribute("data-title")}》吗？\n文章将移入回收站（src/data/admin/trash/）。`)) return;
-    const response = await fetch(`/api/admin/post?slug=${encodeURIComponent(slug)}`, {
-      method: "DELETE",
+  document
+    .getElementById("post-rows")
+    ?.addEventListener("click", async event => {
+      const target = event.target as HTMLElement;
+      const slug = target.getAttribute("data-delete");
+      if (!slug) return;
+      if (
+        !confirm(
+          `确定删除《${target.getAttribute("data-title")}》吗？\n文章将移入回收站（src/data/admin/trash/）。`
+        )
+      )
+        return;
+      const response = await fetch(
+        `/api/admin/post?slug=${encodeURIComponent(slug)}`,
+        {
+          method: "DELETE",
+        }
+      );
+      if (response.ok) loadPosts();
     });
-    if (response.ok) loadPosts();
-  });
 
   // 让导入流程结束后能刷新列表
   window.addEventListener("posts:refresh", () => loadPosts());
@@ -258,6 +297,8 @@ if (!(await isAuthed(Astro.cookies))) {
 
 <script>
   /* ══════════ Markdown 导入 ══════════ */
+  import { slugify as sharedSlugify } from "@/utils/slug";
+
   type Pending = {
     name: string;
     content: string;
@@ -273,14 +314,26 @@ if (!(await isAuthed(Astro.cookies))) {
   const MAX_BYTES = 2 * 1024 * 1024;
 
   const importBtn = document.getElementById("import-btn") as HTMLElement | null;
-  const fileInput = document.getElementById("import-input") as HTMLInputElement | null;
+  const fileInput = document.getElementById(
+    "import-input"
+  ) as HTMLInputElement | null;
   const modal = document.getElementById("import-modal") as HTMLElement | null;
   const listEl = document.getElementById("import-list") as HTMLElement | null;
-  const confirmBtn = document.getElementById("import-confirm") as HTMLButtonElement | null;
-  const overwriteEl = document.getElementById("import-overwrite") as HTMLInputElement | null;
-  const progressWrap = document.getElementById("import-progress") as HTMLElement | null;
-  const progressBar = document.querySelector(".import-progress-bar") as HTMLElement | null;
-  const summaryEl = document.getElementById("import-summary") as HTMLElement | null;
+  const confirmBtn = document.getElementById(
+    "import-confirm"
+  ) as HTMLButtonElement | null;
+  const overwriteEl = document.getElementById(
+    "import-overwrite"
+  ) as HTMLInputElement | null;
+  const progressWrap = document.getElementById(
+    "import-progress"
+  ) as HTMLElement | null;
+  const progressBar = document.querySelector(
+    ".import-progress-bar"
+  ) as HTMLElement | null;
+  const summaryEl = document.getElementById(
+    "import-summary"
+  ) as HTMLElement | null;
   const toastEl = document.getElementById("import-toast") as HTMLElement | null;
   const dropZone = document.getElementById("drop-zone") as HTMLElement | null;
 
@@ -295,15 +348,9 @@ if (!(await isAuthed(Astro.cookies))) {
       .replaceAll('"', "&quot;");
   }
 
-  function slugify(input: string): string {
-    return input
-      .trim()
-      .toLowerCase()
-      .replace(/\.(md|markdown|mdx|txt)$/i, "")
-      .replace(/[^\p{Script=Han}\p{L}\p{N}]+/gu, "-")
-      .replace(/^-+|-+$/g, "")
-      .replace(/-{2,}/g, "-");
-  }
+  // 与服务端（/api/admin/import）共用同一份实现：中文会转成拼音，
+  // 保证预览里显示的 slug 就是真正写入的 slug，冲突判定才准
+  const slugify = sharedSlugify;
 
   /** 粗略解析 frontmatter，仅用于导入前的预览（服务端会做权威解析） */
   function parseFrontmatter(text: string) {
@@ -315,7 +362,8 @@ if (!(await isAuthed(Astro.cookies))) {
       const kv = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(line);
       if (!kv) continue;
       let value = kv[2].trim().replace(/^['"]|['"]$/g, "");
-      if (value.startsWith("[") && value.endsWith("]")) value = value.slice(1, -1);
+      if (value.startsWith("[") && value.endsWith("]"))
+        value = value.slice(1, -1);
       data[kv[1]] = value;
     }
     return { data, content: clean.slice(match[0].length) };
@@ -326,7 +374,7 @@ if (!(await isAuthed(Astro.cookies))) {
       const res = await fetch("/api/admin/posts");
       const data = await res.json();
       existingSlugs = new Set<string>(
-        ((data.posts ?? []) as { slug: string }[]).map(p => String(p.slug)),
+        ((data.posts ?? []) as { slug: string }[]).map(p => String(p.slug))
       );
     } catch {
       existingSlugs = new Set<string>();
@@ -423,7 +471,8 @@ if (!(await isAuthed(Astro.cookies))) {
         continue;
       }
       const { data, content } = parseFrontmatter(text);
-      const slug = slugify(data.slug || file.name) || slugify(data.title || file.name);
+      const slug =
+        slugify(data.slug || file.name) || slugify(data.title || file.name);
       loaded.push({
         name: file.name,
         content: text,
@@ -466,7 +515,8 @@ if (!(await isAuthed(Astro.cookies))) {
       });
       if (progressBar) progressBar.style.width = "70%";
       const result = await response.json();
-      if (!response.ok) throw new Error(result?.message || `HTTP ${response.status}`);
+      if (!response.ok)
+        throw new Error(result?.message || `HTTP ${response.status}`);
 
       const results = (result.results ?? []) as {
         status: string;
@@ -481,7 +531,8 @@ if (!(await isAuthed(Astro.cookies))) {
 
       const parts = [`导入完成：新建 ${created}、覆盖 ${updated}`];
       if (skipped) parts.push(`跳过 ${skipped}`);
-      if (failed.length) parts.push(`失败 ${failed.length}（${failed[0].message ?? ""}）`);
+      if (failed.length)
+        parts.push(`失败 ${failed.length}（${failed[0].message ?? ""}）`);
       toast(parts.join("，"));
 
       window.dispatchEvent(new CustomEvent("posts:refresh"));
@@ -506,7 +557,8 @@ if (!(await isAuthed(Astro.cookies))) {
   });
 
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && modal && !modal.classList.contains("hidden")) closeModal();
+    if (e.key === "Escape" && modal && !modal.classList.contains("hidden"))
+      closeModal();
   });
 
   /* 拖拽导入 */
@@ -519,7 +571,10 @@ if (!(await isAuthed(Astro.cookies))) {
   ["dragleave", "drop"].forEach(type => {
     dropZone?.addEventListener(type, e => {
       e.preventDefault();
-      if (type === "dragleave" && dropZone.contains((e as DragEvent).relatedTarget as Node))
+      if (
+        type === "dragleave" &&
+        dropZone.contains((e as DragEvent).relatedTarget as Node)
+      )
         return;
       dropZone.classList.remove("drag-over");
     });

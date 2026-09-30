@@ -29,6 +29,7 @@
     "lodash.kebabcase": "^4.1.1",
     "marked": "^18.0.14",
     "pagefind": "^1.5.2",
+    "pinyin-pro": "^3.29.4",
     "remark-collapse": "^0.1.2",
     "remark-toc": "^9.0.0",
     "satori": "^0.26.0",
