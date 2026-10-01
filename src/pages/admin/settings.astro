@@ -9,7 +9,7 @@ if (!(await isAuthed(Astro.cookies))) {
   return Astro.redirect("/admin/login");
 }
 import { passwordSource } from "@/utils/adminAuth";
-import { kvEnabled, kvStatus } from "@/utils/kvStore";
+import { kvEnabled, kvProbe, kvStatus } from "@/utils/kvStore";
 
 const source = await passwordSource();
 const sourceText: Record<typeof source, string> = {
@@ -28,9 +28,11 @@ const missingVars = [
 
 const storageText = storageOk
   ? "KV 存储已启用：文章、日志正常持久化，保存后会自动触发重新部署。"
-  : missingVars.length
-    ? `未检测到环境变量：${missingVars.join("、")}。绑定 Redis 后必须点击一次 Redeploy，已部署的函数实例不会自动刷新环境变量。`
-    : "未检测到 KV 存储。线上文件系统只读，导入与保存文章会失败。请在 Vercel 项目设置里绑定 Redis(Upstash) 数据库并重新部署。";
+  : kvStatus.redisUrlPresent && !kvStatus.redisUrlUsable
+    ? "检测到 REDIS_URL，但无法从中解析出主机或令牌。请手动添加 KV_REST_API_URL / KV_REST_API_TOKEN（Upstash 控制台里叫 REST URL / REST Token）。"
+    : missingVars.length
+      ? `未检测到环境变量：${missingVars.join("、")}。绑定 Redis 后必须点击一次 Redeploy，已部署的函数实例不会自动刷新环境变量。`
+      : "未检测到 KV 存储。线上文件系统只读，导入与保存文章会失败。请在 Vercel 项目设置里绑定 Redis(Upstash) 数据库并重新部署。";
 
 // Diagnostics: which storage-related env var NAMES are actually visible to the
 // running function (values are never printed). This settles "I connected the
@@ -40,10 +42,15 @@ const envDiagnostics = {
   vercel: process.env.VERCEL ? "是" : "否",
   vercelEnv: process.env.VERCEL_ENV || "(空)",
   region: process.env.VERCEL_REGION || "(空)",
+  source: kvStatus.source,
+  endpoint: kvStatus.endpoint,
   seen: Object.keys(process.env)
     .filter(k => /kv|upstash|redis|storage/i.test(k))
     .sort(),
 };
+
+// A real round-trip (set/get/del) — proves the derived REST endpoint works.
+const probe = await kvProbe();
 
 const inputClass =
   "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60";
@@ -117,6 +124,20 @@ const inputClass =
               envDiagnostics.vercelEnv
             }，区域{" "}
             {envDiagnostics.region}）
+          </dd>
+        </div>
+        <div class="flex gap-2">
+          <dt class="shrink-0">凭证来源：</dt>
+          <dd class="break-all">{envDiagnostics.source}</dd>
+        </div>
+        <div class="flex gap-2">
+          <dt class="shrink-0">REST 端点：</dt>
+          <dd class="break-all">{envDiagnostics.endpoint}</dd>
+        </div>
+        <div class="flex gap-2">
+          <dt class="shrink-0">读写自检：</dt>
+          <dd class={probe.ok ? "text-emerald-600" : "text-red-500/90"}>
+            {probe.ok ? "通过（写入/读取/删除均正常）" : `失败：${probe.error}`}
           </dd>
         </div>
         <div class="flex gap-2">

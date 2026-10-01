@@ -7,20 +7,51 @@
  *
  *   KV_REST_API_URL / KV_REST_API_TOKEN   (Vercel KV, injected automatically)
  *   UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN
+ *   REDIS_URL                             (rediss://default:TOKEN@host:port)
  *
- * When neither pair is configured (local development) the store transparently
+ * The last one matters: some Vercel / Upstash integrations inject ONLY
+ * `REDIS_URL` (a direct Redis connection string) and no REST variables at all.
+ * Upstash serves the REST API from the same host with the same credential, so
+ * we derive `https://<host>` + the password from it.
+ *
+ * When nothing is configured (local development) the store transparently
  * falls back to JSON files on disk, preserving the original dev experience.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
 
+/** Derive an Upstash REST endpoint from a `rediss://default:TOKEN@host:port` URL. */
+function deriveFromRedisUrl(
+  raw: string
+): { url: string; token: string } | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    const host = u.hostname;
+    // Upstash puts the REST token in the password slot ("default:<token>").
+    const token =
+      decodeURIComponent(u.password || "") ||
+      decodeURIComponent(u.username || "");
+    if (!host || !token || token === "default") return null;
+    return { url: `https://${host}`, token };
+  } catch {
+    return null;
+  }
+}
+
+const derived = deriveFromRedisUrl(process.env.REDIS_URL || "");
+
 const REST_URL = (
   process.env.KV_REST_API_URL ||
   process.env.UPSTASH_REDIS_REST_URL ||
+  derived?.url ||
   ""
 ).replace(/\/+$/, "");
 const REST_TOKEN =
-  process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "";
+  process.env.KV_REST_API_TOKEN ||
+  process.env.UPSTASH_REDIS_REST_TOKEN ||
+  derived?.token ||
+  "";
 
 export const kvEnabled = Boolean(REST_URL && REST_TOKEN);
 
@@ -29,6 +60,18 @@ export const kvStatus = {
   url: Boolean(REST_URL),
   token: Boolean(REST_TOKEN),
   enabled: kvEnabled,
+  source: process.env.KV_REST_API_URL
+    ? "KV_REST_API_URL"
+    : process.env.UPSTASH_REDIS_REST_URL
+      ? "UPSTASH_REDIS_REST_URL"
+      : derived
+        ? "REDIS_URL（已自动推导 REST 端点）"
+        : "(无)",
+  /** True when REDIS_URL existed but could not be parsed into host + token. */
+  redisUrlPresent: Boolean(process.env.REDIS_URL),
+  redisUrlUsable: Boolean(derived),
+  /** Host only — never the credential. */
+  endpoint: REST_URL ? REST_URL.replace(/^https?:\/\//, "") : "(无)",
 };
 
 const LOCAL_DIR = path.resolve(".data/kv");
@@ -60,6 +103,22 @@ async function rest(command: string): Promise<unknown> {
   const json = (await res.json()) as { result?: unknown; error?: string };
   if (json?.error) throw new Error(`KV error: ${json.error}`);
   return json?.result;
+}
+
+/** Real read/write/delete round-trip so the admin can prove KV actually works. */
+export async function kvProbe(): Promise<{ ok: boolean; error?: string }> {
+  if (!kvEnabled) return { ok: false, error: "未检测到可用的 KV 环境变量" };
+  const key = "blog:__probe__";
+  try {
+    await rest(`set/${encodeURIComponent(key)}/1`);
+    const value = await rest(`get/${encodeURIComponent(key)}`);
+    await rest(`del/${encodeURIComponent(key)}`);
+    return String(value) === "1"
+      ? { ok: true }
+      : { ok: false, error: `写入后读回的值不符：${String(value)}` };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
 }
 
 /** Read a JSON value. Returns `fallback` when missing/unavailable. */

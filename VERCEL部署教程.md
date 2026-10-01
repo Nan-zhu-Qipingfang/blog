@@ -129,7 +129,7 @@ cpSync(_staticDir, "./.vercel/output/static/", { recursive: true });
 按诊断结果处理：
 
 1. **一个变量都没有** → 集成没有把变量注入到当前环境。打开项目 **Settings → Environment Variables** 确认；若确实为空，去 Upstash 控制台复制 REST URL 和 Token，**手动添加**为 `KV_REST_API_URL` 与 `KV_REST_API_TOKEN`（环境记得勾 Production 和 Preview），保存后 Redeploy。
-2. **变量名不在上述四个之内** → 把「可见的存储类变量」那一行的名字发出来，改代码适配即可。
+2. **变量名不在上述四个之内** → 若看到的是 `REDIS_URL`（`rediss://default:TOKEN@host:port`），代码已支持自动从中推导 REST 端点，无需手动添加；若自检仍失败，把「可见的存储类变量」那一行的名字发出来，改代码适配即可。
 3. **`VERCEL_ENV` 不是 production** → 你当前访问的是预览环境，而变量只加到了 Production（或反之）。在 **Settings → Environment Variables** 里把缺失的环境勾上，或访问对应的环境。
 4. 无论如何，**改完环境变量都要 Redeploy 一次**。
 
