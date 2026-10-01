@@ -841,6 +841,22 @@ const views = [
   /* ─────────── 保存 / 删除 ─────────── */
   const status = $("save-status");
 
+  /**
+   * "保存成功但前台没反应" 的根因几乎总是没配 Deploy Hook。只回一句"等下次
+   * 部署"用户无从下手，所以没触发成功时直接给一个去设置页的入口。
+   */
+  function paintStatus(text: string, ok: boolean, withFixLink = false) {
+    if (!status) return;
+    status.textContent = text;
+    status.style.color = ok ? "var(--accent)" : "var(--color-red-500, #ef4444)";
+    if (!withFixLink) return;
+    const link = document.createElement("a");
+    link.href = "/admin/settings#deploy-hook";
+    link.textContent = "去设置页配置 Deploy Hook ›";
+    link.style.cssText = "margin-left:6px;white-space:nowrap;text-decoration:underline";
+    status.appendChild(link);
+  }
+
   async function save() {
     const button = $("save-btn") as HTMLButtonElement;
     const topButton = $("save-btn-top") as HTMLButtonElement;
@@ -883,8 +899,14 @@ const views = [
       if (result.ok) {
         savedSlug = result.slug ?? originalSlug;
         const note = result.deploy?.message ?? "";
-        status.textContent = result.deploy?.triggered ? `✓ 已保存。${note}` : `✓ 已保存，但${note || "前台暂不会更新"}`;
-        status.style.color = result.deploy?.triggered ? "var(--accent)" : "var(--color-red-500, #ef4444)";
+        const triggered = Boolean(result.deploy?.triggered);
+        paintStatus(
+          triggered
+            ? `✓ 已保存。${note}`
+            : `✓ 已保存，但${note || "前台暂不会更新"}`,
+          triggered,
+          !triggered
+        );
         // 文章落库后先问要不要摘要，收尾（跳过 / 生成完）统一负责跳转与重建
         openAsk();
       } else {
@@ -1032,10 +1054,14 @@ const views = [
       try {
         const response = await fetch("/api/admin/redeploy", { method: "POST" });
         const result = await response.json();
-        status.textContent = result.triggered
-          ? `✓ 摘要已保存，${result.message}`
-          : `✓ 摘要已保存，但${result.message || "前台暂不会更新"}`;
-        status.style.color = result.triggered ? "var(--accent)" : "var(--color-red-500, #ef4444)";
+        const triggered = Boolean(result.triggered);
+        paintStatus(
+          triggered
+            ? `✓ 摘要已保存，${result.message || ""}`
+            : `✓ 摘要已保存，但${result.message || "前台暂不会更新"}`,
+          triggered,
+          !triggered
+        );
       } catch {
         /* 触发失败也照常离开，保存本身没丢 */
       }

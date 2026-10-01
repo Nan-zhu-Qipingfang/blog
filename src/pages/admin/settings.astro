@@ -10,7 +10,7 @@ if (!(await isAuthed(Astro.cookies))) {
 }
 import { passwordSource } from "@/utils/adminAuth";
 import { kvEnabled, kvProbe, kvStatus } from "@/utils/kvStore";
-import { deployHookConfigured } from "@/utils/redeploy";
+import { deployHookStatus, getDeployHook } from "@/utils/redeploy";
 import {
   getAiConfig,
   getUsageStats,
@@ -53,6 +53,32 @@ const storageText = storageOk
     : "KV 存储已启用（Upstash REST）：文章、日志正常持久化，保存后会自动触发重新部署。"
   : `未检测到可用的 Redis 环境变量：${missingVars.join("、")}。二选一即可——Upstash 系填 KV_REST_API_URL + KV_REST_API_TOKEN，其他 Redis（如 Redis Cloud）填 REDIS_URL。添加后必须点击一次 Redeploy，已部署的函数实例不会自动刷新环境变量。`;
 
+// The Deploy Hook used to live only in the `DEPLOY_HOOK_URL` env var, which is
+// easy to miss; it can now be typed on this page and is kept in KV.
+const deployHook = await deployHookStatus();
+const deployHookUrl = await getDeployHook();
+
+/** Never print the full hook URL: it contains a deploy token. */
+function maskHook(raw: string): string {
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    const seg = url.pathname.split("/").filter(Boolean);
+    const tail = seg.length ? seg[seg.length - 1] : "";
+    const head = `/${seg.slice(0, -1).join("/").slice(0, 24)}`;
+    return `${url.host}${head}${head.length > 4 ? "…" : ""}/${tail.slice(0, 6)}…`;
+  } catch {
+    return raw.slice(0, 12) + "…";
+  }
+}
+const deployHookMasked = maskHook(deployHookUrl);
+
+// 类名单行算好再传：跨行的 class:list=[…] 表达式 Astro 编译不出来，
+// 会把属性源码原样吐到 HTML 上
+const dhBadgeClass = deployHook.configured
+  ? "rounded-lg bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400"
+  : "rounded-lg bg-red-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-red-500";
+
 // Diagnostics: which storage-related env var NAMES are actually visible to the
 // running function (values are never printed). This settles "I connected the
 // database but it still says KV is off" — either the names differ, or the
@@ -62,7 +88,7 @@ const envDiagnostics = {
   vercelEnv: process.env.VERCEL_ENV || "(空)",
   region: process.env.VERCEL_REGION || "(空)",
   transport: kvStatus.transport,
-  deployHook: deployHookConfigured() ? "已配置" : "未配置",
+  deployHook: deployHook.status,
   source: kvStatus.source,
   endpoint: kvStatus.endpoint,
   seen: Object.keys(process.env)
@@ -181,10 +207,14 @@ const aiPresets = Object.entries(PRESETS).map(([id, p]) => ({
         </div>
         <div class="flex gap-2">
           <dt class="shrink-0">自动重新部署：</dt>
-          <dd class={envDiagnostics.deployHook === "已配置" ? "text-emerald-600" : "text-red-500/90"}>
-            {envDiagnostics.deployHook === "已配置"
-              ? "已配置 DEPLOY_HOOK_URL，保存/导入后约 1 分钟前台生效"
-              : "未配置 DEPLOY_HOOK_URL：文章已保存，但前台要等下次 Git 推送或手动 Redeploy 才更新"}
+          <dd class={deployHook.configured ? "text-emerald-600" : "text-red-500/90"}>
+            {
+              deployHook.configured
+                ? deployHook.source === "saved"
+                  ? "已配置（后台保存的 Deploy Hook），保存/生成摘要后约 1 分钟前台生效"
+                  : "已配置（环境变量 DEPLOY_HOOK_URL），保存/生成摘要后约 1 分钟前台生效"
+                : "未配置：文章已保存，但前台要等下次 Git 推送或手动 Redeploy 才更新"
+            }
           </dd>
         </div>
         <div class="flex gap-2">
@@ -198,6 +228,50 @@ const aiPresets = Object.entries(PRESETS).map(([id, p]) => ({
           </dd>
         </div>
       </dl>
+    </section>
+
+    <section id="deploy-hook" class="bg-card/60 mt-4 scroll-mt-4 rounded-2xl border border-border/60 p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-sm font-bold">自动重新部署（Deploy Hook）</h2>
+        <span id="dh-badge" class={dhBadgeClass}>
+          {deployHook.configured ? "已配置" : "未配置"}
+        </span>
+      </div>
+      <p class="mt-2 text-xs leading-relaxed text-foreground/45">
+        前台是静态构建：后台保存的文章与摘要存在存储里，只有触发一次重新构建，前台才会更新——
+        否则就是「保存成功、前台没反应」。把 Vercel 项目
+        <code class="font-firacode text-accent/80">Settings → Git → Deploy Hooks</code>
+        新建钩子拿到的地址粘到下面（形如 <code class="font-firacode">https://api.vercel.com/v1/integrations/deploy/prj_…</code>
+        ），保存后每次保存文章、生成 AI 摘要都会自动重建，约 1 分钟前台生效。
+        留空并保存即清除（此时仍可用环境变量 <code class="font-firacode">DEPLOY_HOOK_URL</code>）。
+      </p>
+      <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          id="dh-url"
+          type="text"
+          spellcheck="false"
+          class={inputClass + " flex-1 font-firacode text-xs"}
+          placeholder="https://api.vercel.com/v1/integrations/deploy/prj_xxxxxxxx/xxxxxxxx"
+          value={deployHookMasked}
+        />
+        <div class="flex gap-2">
+          <button
+            id="dh-save"
+            type="button"
+            class="cursor-pointer rounded-xl bg-accent px-4 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+          >
+            保存钩子
+          </button>
+          <button
+            id="dh-redeploy"
+            type="button"
+            class="cursor-pointer rounded-xl border border-border px-4 py-1.5 text-xs font-medium transition-colors hover:border-accent/40 hover:text-accent"
+          >
+            立即重建一次
+          </button>
+        </div>
+      </div>
+      <p id="dh-status" class="hidden rounded-lg px-3 py-2 text-xs"></p>
     </section>
 
     <section class="bg-card/60 mt-4 rounded-2xl border border-border/60 p-5">
@@ -775,5 +849,80 @@ const aiPresets = Object.entries(PRESETS).map(([id, p]) => ({
       aiSay("网络错误，请重试", false);
     }
     window.setTimeout(() => aiStatus?.classList.add("hidden"), 6000);
+  });
+
+  /* ── Deploy Hook：后台填写 + 手动重建 ───────────────────── */
+
+  const dhStatus = document.getElementById("dh-status");
+
+  function dhSay(text: string, ok: boolean) {
+    if (!dhStatus) return;
+    dhStatus.textContent = text;
+    dhStatus.classList.remove("hidden");
+    dhStatus.className = `rounded-lg px-3 py-2 text-xs ${ok ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-500"}`;
+    window.setTimeout(() => dhStatus.classList.add("hidden"), 8000);
+  }
+
+  function paintDhBadge(configured: boolean, source?: string) {
+    const badge = document.getElementById("dh-badge");
+    if (!badge) return;
+    badge.textContent = configured
+      ? source === "env"
+        ? "已配置（环境变量）"
+        : "已配置（后台保存）"
+      : "未配置";
+    badge.className = `rounded-lg px-2.5 py-0.5 text-[11px] font-semibold ${
+      configured
+        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+        : "bg-red-500/10 text-red-500"
+    }`;
+  }
+
+  document.getElementById("dh-save")?.addEventListener("click", async () => {
+    const input = document.getElementById("dh-url") as HTMLInputElement | null;
+    const value = (input?.value ?? "").trim();
+    dhSay("保存中…", true);
+    try {
+      const res = await fetch("/api/admin/deploy-hook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: value }),
+      });
+      const j = await res.json();
+      if (!j.ok) {
+        dhSay(j.error ?? "保存失败", false);
+        return;
+      }
+      paintDhBadge(j.configured, j.source);
+      dhSay(
+        j.configured
+          ? "✓ 已保存，之后保存文章 / 生成摘要都会自动触发重建。"
+          : "✓ 已清除。前台要等下次 Git 推送或手动点「立即重建一次」。",
+        true
+      );
+    } catch {
+      dhSay("网络错误，请重试", false);
+    }
+  });
+
+  document.getElementById("dh-redeploy")?.addEventListener("click", async () => {
+    const btn = document.getElementById("dh-redeploy") as HTMLButtonElement | null;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "重建中…";
+    }
+    dhSay("正在触发重建…", true);
+    try {
+      const res = await fetch("/api/admin/redeploy", { method: "POST" });
+      const j = await res.json();
+      dhSay(j.ok ? `✓ ${j.message || "已触发重新部署"}` : j.message || "触发失败", Boolean(j.ok));
+    } catch {
+      dhSay("网络错误，请重试", false);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "立即重建一次";
+      }
+    }
   });
 </script>

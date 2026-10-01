@@ -573,12 +573,17 @@ div.videos[col="4"] > iframe {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: 1.25rem;
   color: #fff;
   font-size: 0.82rem;
-  line-height: 1.5;
+  line-height: 1.6;
   text-align: center;
   background: rgba(0, 0, 0, 0.6);
+}
+
+/* 提示文案现在会说明具体原因（源站失效 / 跨域被拦），限宽免得糊满整块 */
+.vg-error-text {
+  max-width: 34rem;
 }
 
 .vg-item-caption {

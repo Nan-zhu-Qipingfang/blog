@@ -24,8 +24,36 @@
     if (!box || box.querySelector(".vg-error")) return;
     const tip = document.createElement("div");
     tip.className = "vg-error";
-    tip.textContent = msg;
+    const text = document.createElement("div");
+    text.className = "vg-error-text";
+    text.textContent = msg;
+    tip.appendChild(text);
     box.appendChild(tip);
+  }
+
+  /**
+   * hls.js 的错误码一大堆，但真正会让用户犯迷糊的只有两种：源站本身挂了，
+   * 或者源站没给 CORS 头导致浏览器拒载。这里把它翻成人话。
+   */
+  function hlsMessage(data) {
+    const details = String(data?.details ?? "");
+    const status = data?.response?.status ? `（HTTP ${data.response.status}）` : "";
+    if (/manifest/i.test(details)) {
+      return `视频源取不到播放列表${status}：链接可能已失效、需要鉴权，或对方站点已停止支持固定链接播放。`;
+    }
+    if (/cors/i.test(details)) {
+      return `视频源跨域被拦截${status}：对方响应头没有 Access-Control-Allow-Origin，浏览器会直接拒载（换支持 CORS 的直链即可）。`;
+    }
+    if (/parse/i.test(details)) {
+      return `视频源返回的不是播放列表${status}（多半是接口返回了一段错误提示，而不是 m3u8）。`;
+    }
+    if (/timeout/i.test(details)) {
+      return `连接视频源超时${status}，请检查网络后重试。`;
+    }
+    if (/buffer|media/i.test(details)) {
+      return "视频流解析失败：可能是编码格式不被当前浏览器支持。";
+    }
+    return `视频加载失败：${details || "未知错误"}${status}`;
   }
 
   async function mount(video) {
@@ -40,6 +68,10 @@
     // Safari / iOS 原生支持 HLS，直接给 src 更省电
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = src;
+      // Safari 拿到的是 JSON 错误页时不会抛 hls.js 错误，只有媒体元素自己报错
+      video.addEventListener("error", () =>
+        fail(video, "该视频无法播放：源站返回的内容不是可播放的视频（链接可能已失效）")
+      );
       return;
     }
 
@@ -53,7 +85,7 @@
     const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
     instances.add(hls);
     hls.on(Hls.Events.ERROR, (_evt, data) => {
-      if (data && data.fatal) fail(video, "视频加载失败，请检查链接是否有效");
+      if (data && data.fatal) fail(video, hlsMessage(data));
     });
     hls.loadSource(src);
     hls.attachMedia(video);

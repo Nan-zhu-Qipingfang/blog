@@ -1,20 +1,23 @@
 export const prerender = false;
 
 import { isAuthed } from "@/utils/adminAuth";
-import { deployHookConfigured, triggerRedeploy } from "@/utils/redeploy";
+import { deployHookStatus, triggerRedeploy } from "@/utils/redeploy";
 
 /**
- * 摘要是在文章保存**之后**才写回 frontmatter 的，不会带上保存那次的部署钩子，
- * 所以补摘要改成后需要再手动触发一次重建，否则前台永远看不到新摘要。
+ * Manual trigger + the escape hatch used by the editor when a save lands but
+ * the front-end doesn't move. Summary writes happen *after* the post save and
+ * never carry the hook from that request, so a summary-only change needs its
+ * own rebuild too.
  */
 export async function POST({ cookies }: { cookies: any }) {
   if (!(await isAuthed(cookies))) {
     return Response.json({ ok: false, error: "未登录" }, { status: 401 });
   }
-  const result = await triggerRedeploy();
+  const [result, status] = await Promise.all([triggerRedeploy(), deployHookStatus()]);
   return Response.json({
     ok: result.triggered,
     triggered: result.triggered,
-    message: result.message || (deployHookConfigured() ? "" : "未配置 DEPLOY_HOOK_URL"),
+    source: result.source ?? status.source,
+    message: result.message || (status.configured ? "" : "未配置部署钩子"),
   });
 }

@@ -21,6 +21,7 @@ tmp-esbuild-out/
 # AI summary runtime state (kept in KV on Vercel; local copy is dev-only)
 src/data/admin/aiSummary.json
 src/data/admin/aiUsage.json
+src/data/admin/deployHook.json
 
 # logs
 npm-debug.log*
