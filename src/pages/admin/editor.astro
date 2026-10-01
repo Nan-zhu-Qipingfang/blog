@@ -9,101 +9,374 @@ if (!(await isAuthed(Astro.cookies))) {
   return Astro.redirect("/admin/login");
 }
 
-const inputClass =
-  "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60";
+const svg = (body: string) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+
+type ToolItem = { act: string; title: string; icon?: string; label?: string };
+
+const ICONS: Record<string, string> = {
+  undo: svg(`<path d="M3 7v6h6"/><path d="M3.5 13a9 9 0 1 0 2.6-7.4L3 8"/>`),
+  redo: svg(`<path d="M21 7v6h-6"/><path d="M20.5 13a9 9 0 1 1-2.6-7.4L21 8"/>`),
+  bold: svg(`<path d="M6 4h7.5a4 4 0 0 1 2.6 7H6z"/><path d="M6 12h8.5a4 4 0 0 1 2.6 7H6z"/>`),
+  italic: svg(`<line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/>`),
+  underline: svg(`<path d="M6 3v7a6 6 0 0 0 12 0V3"/><line x1="4" y1="21" x2="20" y2="21"/>`),
+  strike: svg(`<line x1="4" y1="12" x2="20" y2="12"/><path d="M16.5 7A4.5 4.5 0 0 0 13 5.5h-1.5a3.5 3.5 0 0 0-1 6.9h2a3.8 3.8 0 0 1 .6 7.5H11a4.6 4.6 0 0 1-4.2-2.6"/>`),
+  ul: svg(`<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/>`),
+  ol: svg(`<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M3 10a1.4 1.4 0 1 0 2.6.8"/><path d="M4 16h2l-2 3h2"/>`),
+  task: svg(`<path d="m3 7 2 2 3-3"/><path d="m3 17 2 2 3-3"/><line x1="12" y1="8" x2="21" y2="8"/><line x1="12" y1="18" x2="21" y2="18"/>`),
+  code: svg(`<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>`),
+  codeblock: svg(`<rect x="2" y="4" width="20" height="16" rx="3"/><path d="m7 10 2.5 2-2.5 2"/><line x1="13" y1="14" x2="17" y2="14"/>`),
+  quote: svg(`<path d="M4 6v12"/><path d="M9 8h11"/><path d="M9 12h11"/><path d="M9 16h7"/>`),
+  link: svg(`<path d="M10 13a5 5 0 0 0 7.5.5l3-3A5 5 0 0 0 13.5 3.5l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3A5 5 0 0 0 10.5 20.5l1.7-1.7"/>`),
+  image: svg(`<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 15-5-5L5 21"/>`),
+  table: svg(`<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/>`),
+  hr: svg(`<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6" opacity=".35"/><line x1="3" y1="18" x2="21" y2="18" opacity=".35"/>`),
+  mermaid: svg(`<rect x="3" y="3" width="7" height="6" rx="2"/><rect x="14" y="15" width="7" height="6" rx="2"/><path d="M10 6h4a2 2 0 0 1 2 2v7"/>`),
+  katex: svg(`<path d="M4 5h6"/><path d="M7 5v14"/><path d="M13 19l4-14 4 14"/><path d="M13.5 14.5h7"/>`),
+  save: svg(`<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>`),
+  split: svg(`<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/>`),
+  eye: svg(`<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>`),
+  source: svg(`<path d="m9 18-6-6 6-6"/><path d="m15 6 6 6-6 6"/>`),
+};
+
+/** 工具栏分组：组与组之间渲染一条竖分隔线 */
+const toolGroups: ToolItem[][] = [
+  [
+    { act: "undo", title: "撤销 (Ctrl+Z)", icon: ICONS.undo },
+    { act: "redo", title: "重做 (Ctrl+Shift+Z)", icon: ICONS.redo },
+  ],
+  [
+    { act: "bold", title: "加粗 (Ctrl+B)", icon: ICONS.bold },
+    { act: "italic", title: "斜体 (Ctrl+I)", icon: ICONS.italic },
+    { act: "underline", title: "下划线", icon: ICONS.underline },
+    { act: "strike", title: "删除线", icon: ICONS.strike },
+    { act: "sup", title: "上标", label: "x²" },
+    { act: "sub", title: "下标", label: "x₂" },
+  ],
+  [
+    { act: "h1", title: "一级标题", label: "H1" },
+    { act: "h2", title: "二级标题", label: "H2" },
+    { act: "h3", title: "三级标题", label: "H3" },
+  ],
+  [
+    { act: "ul", title: "无序列表", icon: ICONS.ul },
+    { act: "ol", title: "有序列表", icon: ICONS.ol },
+    { act: "task", title: "任务列表", icon: ICONS.task },
+  ],
+  [
+    { act: "code", title: "行内代码", icon: ICONS.code },
+    { act: "codeblock", title: "代码块", icon: ICONS.codeblock },
+    { act: "quote", title: "引用", icon: ICONS.quote },
+  ],
+  [
+    { act: "link", title: "链接", icon: ICONS.link },
+    { act: "image", title: "图片", icon: ICONS.image },
+    { act: "table", title: "表格", icon: ICONS.table },
+    { act: "hr", title: "分割线", icon: ICONS.hr },
+  ],
+  [
+    { act: "mermaid", title: "Mermaid 图", icon: ICONS.mermaid },
+    { act: "katex", title: "KaTeX 公式", icon: ICONS.katex },
+  ],
+  [{ act: "save", title: "保存 (Ctrl+S)", icon: ICONS.save }],
+];
+
+const views = [
+  { id: "split", label: "双栏", icon: ICONS.split },
+  { id: "preview", label: "预览", icon: ICONS.eye },
+  { id: "source", label: "源码", icon: ICONS.source },
+];
 ---
 
 <AdminLayout>
-  <div class="mx-auto max-w-4xl">
-    <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
+  <div class="mx-auto max-w-[1500px]">
+    <header class="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 id="editor-title" class="text-xl font-extrabold">撰写新文章</h1>
-        <p id="editor-sub" class="mt-1 text-sm text-foreground/50">写入 src/data/blog/，开发模式下保存后前台即时生效</p>
+        <h1 id="editor-title" class="text-xl font-extrabold tracking-tight">撰写新文章</h1>
+        <p id="editor-sub" class="mt-1 text-sm text-foreground/50">
+          写入 src/data/blog/，保存并触发重新部署后前台生效
+        </p>
       </div>
-      <a href="/admin/posts" class="text-sm font-medium text-accent no-underline hover:underline">← 返回列表</a>
+      <div class="flex items-center gap-2">
+        <button
+          id="save-btn-top"
+          type="button"
+          class="glass-btn px-4 py-2 text-sm font-semibold text-accent"
+        >
+          <span class="size-4" set:html={ICONS.save} />
+          保存
+        </button>
+        <a href="/admin/posts" class="glass-btn px-4 py-2 text-sm text-foreground/70 no-underline">
+          ← 返回列表
+        </a>
+      </div>
     </header>
 
-    <div class="flex flex-col gap-4">
-      <section class="rounded-2xl border border-border/60 bg-card/60 p-5">
-        <div class="grid gap-4 sm:grid-cols-2">
-          <label class="block sm:col-span-2">
-            <span class="mb-1.5 block text-xs font-medium text-foreground/60">标题 *</span>
-            <input id="f-title" type="text" class={inputClass} placeholder="文章标题" />
+    <!-- ── 文章元信息 ── -->
+    <section class="glass glass-specular mb-5 p-5">
+      <div class="relative z-2 grid gap-4 sm:grid-cols-2">
+        <label class="block sm:col-span-2">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">标题 *</span>
+          <input id="f-title" type="text" class="glass-field w-full px-3.5 py-2.5 text-sm" placeholder="文章标题" />
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">Slug（URL，留空自动生成）</span>
+          <input id="f-slug" type="text" class="glass-field w-full px-3.5 py-2.5 font-firacode text-sm" placeholder="my-new-post" />
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">标签（英文逗号分隔）</span>
+          <input id="f-tags" type="text" class="glass-field w-full px-3.5 py-2.5 text-sm" placeholder="Astro, 随笔" />
+        </label>
+        <label class="block sm:col-span-2">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">描述（摘要）</span>
+          <textarea id="f-desc" rows="2" class="glass-field w-full resize-y px-3.5 py-2.5 text-sm" placeholder="显示在文章列表与分享卡片上的摘要"></textarea>
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">发布时间</span>
+          <input id="f-date" type="datetime-local" class="glass-field w-full px-3.5 py-2.5 font-firacode text-sm" />
+        </label>
+        <div class="flex items-end gap-5 pb-2">
+          <label class="flex cursor-pointer items-center gap-2 text-sm">
+            <input id="f-featured" type="checkbox" class="size-4 accent-[var(--accent)]" />
+            精选
           </label>
-          <label class="block">
-            <span class="mb-1.5 block text-xs font-medium text-foreground/60">Slug（URL，留空自动生成）</span>
-            <input id="f-slug" type="text" class={inputClass + " font-firacode"} placeholder="my-new-post" />
+          <label class="flex cursor-pointer items-center gap-2 text-sm">
+            <input id="f-draft" type="checkbox" class="size-4 accent-[var(--accent)]" />
+            存为草稿
           </label>
-          <label class="block">
-            <span class="mb-1.5 block text-xs font-medium text-foreground/60">标签（英文逗号分隔）</span>
-            <input id="f-tags" type="text" class={inputClass} placeholder="Astro, 随笔" />
-          </label>
-          <label class="block sm:col-span-2">
-            <span class="mb-1.5 block text-xs font-medium text-foreground/60">描述（摘要）</span>
-            <textarea id="f-desc" rows="2" class={inputClass + " resize-y"} placeholder="显示在文章列表与分享卡片上的摘要"></textarea>
-          </label>
-          <label class="block">
-            <span class="mb-1.5 block text-xs font-medium text-foreground/60">发布时间</span>
-            <input id="f-date" type="datetime-local" class={inputClass + " font-firacode"} />
-          </label>
-          <div class="flex items-end gap-5 pb-1">
-            <label class="flex cursor-pointer items-center gap-2 text-sm">
-              <input id="f-featured" type="checkbox" class="size-4 accent-[var(--accent)]" />
-              精选
-            </label>
-            <label class="flex cursor-pointer items-center gap-2 text-sm">
-              <input id="f-draft" type="checkbox" class="size-4 accent-[var(--accent)]" />
-              存为草稿
-            </label>
-          </div>
         </div>
-      </section>
-
-      <section class="rounded-2xl border border-border/60 bg-card/60 p-5">
-        <div class="mb-2 flex items-center justify-between">
-          <span class="text-xs font-medium text-foreground/60">正文（Markdown）*</span>
-          <div class="flex rounded-lg border border-border/60 p-0.5 text-xs">
-            <button id="tab-write" type="button" class="cursor-pointer rounded-md bg-accent/12 px-3 py-1 font-medium text-accent">编辑</button>
-            <button id="tab-preview" type="button" class="cursor-pointer rounded-md px-3 py-1 font-medium text-foreground/50 transition-colors hover:text-foreground">预览</button>
-          </div>
-        </div>
-        <textarea id="f-content" rows="18" class={inputClass + " resize-y font-firacode text-[13px] leading-relaxed"} placeholder="## 用 Markdown 书写&#10;&#10;支持代码块、引用、图片等语法。"></textarea>
-        <div id="preview" class="app-prose mt-2 hidden max-h-[480px] overflow-y-auto rounded-xl border border-border/40 p-4 text-sm"></div>
-      </section>
-
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          id="save-btn"
-          type="button"
-          class="cursor-pointer rounded-xl bg-accent px-6 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
-        >
-          保存文章
-        </button>
-        <button
-          id="delete-btn"
-          type="button"
-          class="hidden cursor-pointer rounded-xl border border-red-500/40 px-4 py-2.5 text-sm font-medium text-red-500 transition-colors hover:bg-red-500/10"
-        >
-          删除（移入回收站）
-        </button>
-        <span id="save-status" class="text-xs text-foreground/45"></span>
       </div>
+    </section>
+
+    <!-- ── 编辑器 ── -->
+    <section id="editor-shell" data-view="split" class="glass glass-specular overflow-hidden">
+      <!-- 工具栏 -->
+      <div class="editor-toolbar relative z-3 flex flex-wrap items-center gap-x-1 gap-y-1 border-b border-[var(--glass-border)] px-2 py-2">
+        {
+          toolGroups.map((group, gi) => (
+            <div class:list={["flex items-center gap-0.5", gi > 0 && "toolbar-sep"]}>
+              {group.map(item => (
+                <button
+                  type="button"
+                  data-act={item.act}
+                  title={item.title}
+                  aria-label={item.title}
+                  class:list={["tb-btn", item.label ? "tb-btn-text" : ""]}
+                  set:html={item.icon ?? item.label}
+                />
+              ))}
+            </div>
+          ))
+        }
+        <div class="toolbar-sep ml-auto flex items-center gap-0.5 pr-1">
+          {
+            views.map(v => (
+              <button
+                type="button"
+                data-view={v.id}
+                title={`${v.label}视图`}
+                aria-label={`${v.label}视图`}
+                class:list={["tb-btn view-btn", v.id === "split" && "is-active"]}
+                set:html={v.icon}
+              />
+            ))
+          }
+        </div>
+      </div>
+
+      <!-- 编辑 / 预览 -->
+      <div id="editor-panes" class="editor-panes">
+        <div id="pane-source" class="editor-pane min-w-0">
+          <textarea
+            id="f-content"
+            spellcheck="false"
+            class="editor-input h-full w-full resize-none px-4 py-4 font-firacode text-[13.5px] leading-[1.9] outline-none"
+            placeholder={"# 用 Markdown 书写\n\n支持代码块、引用、图片、Mermaid、KaTeX 等语法。\n单换行即换行，与前台显示一致。"}
+          ></textarea>
+        </div>
+        <div id="pane-preview" class="editor-pane min-w-0 border-s border-[var(--glass-border)]">
+          <div id="preview" class="app-prose h-full overflow-y-auto px-5 py-4 text-sm"></div>
+        </div>
+      </div>
+
+      <!-- 状态栏 -->
+      <div class="editor-status relative z-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--glass-border)] px-4 py-2 text-xs text-foreground/50">
+        <span id="stat-count">0 字</span>
+        <span id="stat-pos">行 1，列 1</span>
+        <span id="save-status" class="ms-auto"></span>
+      </div>
+    </section>
+
+    <div class="mt-4 flex flex-wrap items-center gap-2">
+      <button
+        id="save-btn"
+        type="button"
+        class="cursor-pointer rounded-2xl bg-accent px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition-all hover:opacity-90 active:scale-[0.98]"
+      >
+        保存文章
+      </button>
+      <button
+        id="delete-btn"
+        type="button"
+        class="hidden cursor-pointer rounded-2xl border border-red-500/40 px-4 py-2.5 text-sm font-medium text-red-500 transition-colors hover:bg-red-500/10"
+      >
+        删除（移入回收站）
+      </button>
     </div>
   </div>
 </AdminLayout>
 
+<style>
+  .editor-toolbar {
+    background: color-mix(in srgb, var(--foreground) 3%, transparent);
+  }
+
+  .toolbar-sep {
+    position: relative;
+    margin-left: 0.25rem;
+    padding-left: 0.4rem;
+  }
+  .toolbar-sep::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    height: 18px;
+    width: 1px;
+    transform: translateY(-50%);
+    background: color-mix(in srgb, var(--border) 30%, transparent);
+  }
+
+  .tb-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding-inline: 0.35rem;
+    border-radius: 0.65rem;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+    background: transparent;
+    transition:
+      background-color 0.18s ease,
+      color 0.18s ease,
+      transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+  .tb-btn > :global(svg) {
+    width: 1rem;
+    height: 1rem;
+  }
+  .tb-btn:hover {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent);
+  }
+  .tb-btn:active {
+    transform: scale(0.9);
+    transition-duration: 0.08s;
+  }
+  .tb-btn-text {
+    font-family: var(--font-firacode);
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+  .view-btn.is-active {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent);
+  }
+
+  /* 双栏 / 单栏布局：用 CSS 变量控制，切换时带过渡 */
+  .editor-panes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    height: min(62vh, 720px);
+    min-height: 380px;
+    transition: grid-template-columns 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  #editor-shell[data-view="preview"] .editor-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #editor-shell[data-view="source"] .editor-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #editor-shell[data-view="preview"] #pane-source {
+    display: none;
+  }
+  #editor-shell[data-view="source"] #pane-preview {
+    display: none;
+  }
+  #editor-shell[data-view="source"] #pane-source,
+  #editor-shell[data-view="preview"] #pane-preview {
+    border-inline-start: 0;
+  }
+
+  .editor-pane {
+    min-height: 0;
+    position: relative;
+  }
+
+  .editor-input {
+    background: transparent;
+    color: var(--foreground);
+    tab-size: 2;
+  }
+  .editor-input::placeholder {
+    color: color-mix(in srgb, var(--foreground) 30%, transparent);
+  }
+
+  @media (max-width: 900px) {
+    .editor-panes {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+      height: auto;
+    }
+    #editor-shell[data-view="source"] .editor-panes,
+    #editor-shell[data-view="preview"] .editor-panes {
+      grid-template-rows: minmax(0, 1fr);
+    }
+    #pane-preview {
+      border-inline-start: 0 !important;
+      border-top: 1px solid var(--glass-border);
+    }
+  }
+
+  /* 预览区里的 Mermaid / KaTeX 兜底样式 */
+  #preview :global(.mermaid-fallback) {
+    padding: 0.8rem 1rem;
+    border-radius: var(--radius-field);
+    border: 1px dashed color-mix(in srgb, var(--border) 45%, transparent);
+    font-family: var(--font-firacode);
+    font-size: 0.78rem;
+    white-space: pre-wrap;
+    color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  }
+  #preview :global(.mermaid svg) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .editor-panes,
+    .tb-btn {
+      transition: none;
+    }
+  }
+</style>
+
 <script>
   import { marked } from "marked";
 
-  type PostData = {
-    slug: string;
-    frontmatter: Record<string, unknown>;
-    content: string;
-  };
+  type PostData = { slug: string; frontmatter: Record<string, unknown>; content: string };
+
+  marked.setOptions({ gfm: true, breaks: true });
 
   const originalSlug = new URLSearchParams(location.search).get("slug") ?? "";
-  const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
-    document.getElementById(id) as T;
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+
+  const ta = $("f-content") as HTMLTextAreaElement;
+  const preview = $("preview");
+  const shell = $("editor-shell");
+  const statCount = $("stat-count");
+  const statPos = $("stat-pos");
 
   const toLocalInput = (iso: string) => {
     const date = new Date(iso);
@@ -112,67 +385,358 @@ const inputClass =
     return local.toISOString().slice(0, 16);
   };
 
-  if (originalSlug) {
-    $("editor-title").textContent = "编辑文章";
-    $("delete-btn").classList.remove("hidden");
-    (async () => {
-      const response = await fetch(`/api/admin/post?slug=${encodeURIComponent(originalSlug)}`);
-      if (response.status === 401) {
-        location.href = "/admin/login";
-        return;
-      }
-      const result = await response.json();
-      if (!result.ok) {
-        $("save-status").textContent = `加载失败：${result.message}`;
-        return;
-      }
-      const post: PostData = result.post;
-      const fm = post.frontmatter;
-      ($("f-title") as HTMLInputElement).value = String(fm.title ?? "");
-      ($("f-slug") as HTMLInputElement).value = post.slug;
-      ($("f-desc") as HTMLTextAreaElement).value = String(fm.description ?? "");
-      ($("f-tags") as HTMLInputElement).value = Array.isArray(fm.tags)
-        ? (fm.tags as string[]).join(", ")
-        : "";
-      ($("f-date") as HTMLInputElement).value = toLocalInput(String(fm.pubDatetime ?? ""));
-      ($("f-featured") as HTMLInputElement).checked = Boolean(fm.featured);
-      ($("f-draft") as HTMLInputElement).checked = Boolean(fm.draft);
-      ($("f-content") as HTMLTextAreaElement).value = post.content;
-      $("editor-sub").textContent = `正在编辑 src/data/blog/${post.slug}.md`;
-    })();
-  } else {
-    ($("f-date") as HTMLInputElement).value = toLocalInput(new Date().toISOString());
+  /* ─────────── 历史记录（自建，textarea 原生 undo 会被程序化改动打断）─────────── */
+  let history: string[] = [ta.value];
+  let hIndex = 0;
+  let recordTimer: number | undefined;
+
+  const scheduleRecord = () => {
+    window.clearTimeout(recordTimer);
+    recordTimer = window.setTimeout(record, 400);
+  };
+
+  function record() {
+    const value = ta.value;
+    if (history[hIndex] === value) return;
+    history = history.slice(0, hIndex + 1);
+    history.push(value);
+    if (history.length > 200) history.shift();
+    hIndex = history.length - 1;
   }
 
-  // Tab switching: write <-> preview
-  const writeTab = $("tab-write");
-  const previewTab = $("tab-preview");
-  writeTab.addEventListener("click", () => {
-    $("f-content").classList.remove("hidden");
-    $("preview").classList.add("hidden");
-    writeTab.classList.add("bg-accent/12", "text-accent");
-    previewTab.classList.remove("bg-accent/12", "text-accent");
-  });
-  previewTab.addEventListener("click", () => {
-    $("preview").innerHTML = marked.parse(($("f-content") as HTMLTextAreaElement).value) as string;
-    $("f-content").classList.add("hidden");
-    $("preview").classList.remove("hidden");
-    previewTab.classList.add("bg-accent/12", "text-accent");
-    writeTab.classList.remove("bg-accent/12", "text-accent");
+  function travel(delta: number) {
+    const next = hIndex + delta;
+    if (next < 0 || next >= history.length) return;
+    hIndex = next;
+    const value = history[hIndex];
+    ta.value = value;
+    ta.focus();
+    const end = Math.min(value.length, ta.selectionStart);
+    ta.setSelectionRange(end, end);
+    render();
+  }
+
+  /* ─────────── 文本编辑原语 ─────────── */
+  function commit(value: string, selStart: number, selEnd: number) {
+    ta.value = value;
+    ta.focus();
+    ta.setSelectionRange(selStart, selEnd);
+    record();
+    render();
+  }
+
+  /** 选中文本前后包裹；无选中则插入占位符并选中它 */
+  function wrap(before: string, after: string, placeholder: string) {
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = ta.value.slice(start, end);
+    const body = selected || placeholder;
+    commit(
+      ta.value.slice(0, start) + before + body + after + ta.value.slice(end),
+      start + before.length,
+      start + before.length + body.length
+    );
+  }
+
+  /** 给选中的每一行加前缀（支持序号）；再点一次则移除，作为开关使用 */
+  function prefixLines(prefix: string | ((index: number) => string), detect: RegExp) {
+    const value = ta.value;
+    const start = value.lastIndexOf("\n", ta.selectionStart - 1) + 1;
+    let end = value.indexOf("\n", ta.selectionEnd);
+    if (end === -1) end = value.length;
+    const block = value.slice(start, end);
+    const lines = block.split("\n");
+    const allHave = lines.every(line => detect.test(line));
+    const joined = lines
+      .map((line, i) => {
+        if (allHave) return line.replace(detect, "");
+        return (typeof prefix === "function" ? prefix(i) : prefix) + line;
+      })
+      .join("\n");
+    commit(value.slice(0, start) + joined + value.slice(end), start, start + joined.length);
+  }
+
+  /** 在当前光标处插入一个块，前后自动补空行 */
+  function insertBlock(text: string) {
+    const value = ta.value;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    const lead = before && !before.endsWith("\n\n") ? (before.endsWith("\n") ? "\n" : "\n\n") : "";
+    const tail = after.startsWith("\n") ? "" : "\n";
+    const block = lead + text + tail;
+    const cursor = start + block.length - tail.length;
+    commit(before + block + after, cursor, cursor);
+  }
+
+  /** 行内插入（链接/图片），有选中则作为文字/描述 */
+  function insertInline(text: string, selStart: number, selLen: number) {
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    commit(ta.value.slice(0, start) + text + ta.value.slice(end), start + selStart, start + selStart + selLen);
+  }
+
+  const ACTIONS: Record<string, () => void> = {
+    undo: () => travel(-1),
+    redo: () => travel(1),
+    bold: () => wrap("**", "**", "加粗文字"),
+    italic: () => wrap("*", "*", "斜体文字"),
+    underline: () => wrap("<u>", "</u>", "下划线文字"),
+    strike: () => wrap("~~", "~~", "删除线文字"),
+    sup: () => wrap("<sup>", "</sup>", "上标"),
+    sub: () => wrap("<sub>", "</sub>", "下标"),
+    h1: () => prefixLines("# ", /^#{1}\s/),
+    h2: () => prefixLines("## ", /^#{2}\s/),
+    h3: () => prefixLines("### ", /^#{3}\s/),
+    ul: () => prefixLines("- ", /^[-*+]\s/),
+    ol: () => prefixLines(i => `${i + 1}. `, /^\d+\.\s/),
+    task: () => prefixLines("- [ ] ", /^[-*+]\s*\[[ xX]\]\s*/),
+    quote: () => prefixLines("> ", /^>\s/),
+    code: () => wrap("`", "`", "code"),
+    codeblock: () => insertBlock("```ts\n// 在这里写代码\n```"),
+    link: () => insertInline("[链接文字](https://example.com)", 1, 4),
+    image: () => insertInline("![图片描述](https://example.com/image.png)", 2, 4),
+    table: () =>
+      insertBlock(
+        "| 列 1 | 列 2 | 列 3 |\n| ---- | ---- | ---- |\n| 内容 | 内容 | 内容 |"
+      ),
+    hr: () => insertBlock("---"),
+    mermaid: () => insertBlock("```mermaid\ngraph TD\n  A[开始] --> B[结束]\n```"),
+    katex: () => insertBlock("$$\nE = mc^2\n$$"),
+    save: () => void save(),
+  };
+
+  document.querySelectorAll<HTMLButtonElement>(".tb-btn[data-act]").forEach(button => {
+    button.addEventListener("click", () => ACTIONS[button.dataset.act!]?.());
   });
 
-  // Save
-  $("save-btn").addEventListener("click", async () => {
-    const status = $("save-status");
+  /* ─────────── 视图切换 ─────────── */
+  document.querySelectorAll<HTMLButtonElement>(".view-btn").forEach(button => {
+    button.addEventListener("click", () => {
+      shell.dataset.view = button.dataset.view!;
+      document
+        .querySelectorAll(".view-btn")
+        .forEach(b => b.classList.toggle("is-active", b === button));
+      try {
+        localStorage.setItem("admin-editor-view", button.dataset.view!);
+      } catch {}
+    });
+  });
+  try {
+    const saved = localStorage.getItem("admin-editor-view");
+    if (saved && ["split", "preview", "source"].includes(saved)) {
+      shell.dataset.view = saved;
+      document
+        .querySelectorAll(".view-btn")
+        .forEach(b => b.classList.toggle("is-active", b.getAttribute("data-view") === saved));
+    }
+  } catch {}
+
+  /* ─────────── 预览：Mermaid / KaTeX 按需从 CDN 取 ─────────── */
+  const CDN = {
+    mermaid: "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs",
+    katexCss: "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css",
+    katex: "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js",
+    katexAuto: "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js",
+  };
+
+  const win = window as unknown as Record<string, any>;
+  const loaders: Record<string, Promise<any> | undefined> = {};
+
+  function loadScript(src: string): Promise<void> {
+    const key = "ls:" + src;
+    if (win[key]) return win[key];
+    win[key] = new Promise<void>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("load error"));
+      document.head.appendChild(script);
+    });
+    return win[key];
+  }
+
+  function loadEsm(name: string, src: string): Promise<any> {
+    if (win[name]) return Promise.resolve(win[name]);
+    if (loaders[name]) return loaders[name]!;
+    loaders[name] = new Promise<any>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.type = "module";
+      script.textContent = `import * as m from ${JSON.stringify(src)};window[${JSON.stringify(name)}]=m.default??m;window.dispatchEvent(new CustomEvent("__mod",{detail:${JSON.stringify(name)}}));`;
+      script.onerror = () => reject(new Error("module error"));
+      document.head.appendChild(script);
+      window.addEventListener("__mod", function onMod(event) {
+        if ((event as CustomEvent).detail !== name) return;
+        window.removeEventListener("__mod", onMod);
+        resolve(win[name]);
+      });
+      // 10s 超时后放弃，预览降级显示源码
+      window.setTimeout(() => reject(new Error("timeout")), 10000);
+    });
+    return loaders[name]!;
+  }
+
+  function loadCss(href: string) {
+    if (document.querySelector(`link[data-katex]`)) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.dataset.katex = "1";
+    document.head.appendChild(link);
+  }
+
+  async function enhance() {
+    // Mermaid
+    const graphs = preview.querySelectorAll<HTMLElement>("pre > code.language-mermaid");
+    if (graphs.length) {
+      try {
+        const mermaid = await loadEsm("__mermaid", CDN.mermaid);
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "loose",
+          theme: document.firstElementChild?.getAttribute("data-theme") === "dark" ? "dark" : "default",
+        });
+        for (const code of Array.from(graphs)) {
+          const holder = document.createElement("div");
+          holder.className = "mermaid";
+          holder.textContent = code.textContent ?? "";
+          code.closest("pre")?.replaceWith(holder);
+        }
+        await mermaid.run({ nodes: Array.from(preview.querySelectorAll(".mermaid")) });
+      } catch {
+        for (const code of Array.from(graphs)) {
+          const holder = document.createElement("div");
+          holder.className = "mermaid-fallback";
+          holder.textContent = code.textContent ?? "";
+          code.closest("pre")?.replaceWith(holder);
+        }
+      }
+    }
+
+    // KaTeX：只在真的写了公式时才去拉 CDN，避免每篇都发请求
+    const hasMath =
+      /\$[^$\n]+\$/.test(ta.value) || ta.value.includes("$$") || ta.value.includes("\\(");
+    if (hasMath) {
+      try {
+        loadCss(CDN.katexCss);
+        await loadScript(CDN.katex);
+        await loadScript(CDN.katexAuto);
+        win.renderMathInElement?.(preview, {
+          delimiters: [
+            { left: "$$", right: "$$", display: true },
+            { left: "$", right: "$", display: false },
+            { left: "\\[", right: "\\]", display: true },
+            { left: "\\(", right: "\\)", display: false },
+          ],
+          throwOnError: false,
+        });
+      } catch {
+        /* 离线就保持源码原样 */
+      }
+    }
+  }
+
+  let enhanceToken = 0;
+  let renderTimer: number | undefined;
+
+  function render() {
+    window.clearTimeout(renderTimer);
+    renderTimer = window.setTimeout(() => {
+      const token = ++enhanceToken;
+      preview.innerHTML = marked.parse(ta.value) as string;
+      updateStats();
+      if (shell.dataset.view === "source") return;
+      void enhance().then(() => {
+        if (token !== enhanceToken) return; // 期间又改了，丢弃这次结果
+      });
+    }, 140);
+  }
+
+  function updateStats() {
+    const value = ta.value;
+    statCount.textContent = `${value.replace(/\s/g, "").length} 字 · ${value.length} 字符`;
+    const upto = value.slice(0, ta.selectionStart);
+    const line = upto.split("\n").length;
+    const col = upto.length - upto.lastIndexOf("\n");
+    statPos.textContent = `行 ${line}，列 ${col}`;
+  }
+
+  /* ─────────── 事件 ─────────── */
+  ta.addEventListener("input", () => {
+    scheduleRecord();
+    render();
+  });
+  ta.addEventListener("click", updateStats);
+  ta.addEventListener("keyup", updateStats);
+
+  ta.addEventListener("keydown", event => {
+    const meta = event.metaKey || event.ctrlKey;
+    if (meta && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      save();
+      return;
+    }
+    if (meta && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      ACTIONS.bold();
+      return;
+    }
+    if (meta && event.key.toLowerCase() === "i") {
+      event.preventDefault();
+      ACTIONS.italic();
+      return;
+    }
+    if (meta && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      travel(event.shiftKey ? 1 : -1);
+      return;
+    }
+    if (meta && event.key.toLowerCase() === "y") {
+      event.preventDefault();
+      travel(1);
+      return;
+    }
+    if (event.key === "Tab") {
+      event.preventDefault();
+      const start = ta.selectionStart;
+      commit(ta.value.slice(0, start) + "  " + ta.value.slice(ta.selectionEnd), start + 2, start + 2);
+    }
+  });
+
+  // 双栏模式滚动同步
+  let syncLock = false;
+  const sync = (from: HTMLElement, to: HTMLElement) => {
+    if (syncLock) return;
+    syncLock = true;
+    const fromMax = from.scrollHeight - from.clientHeight;
+    const toMax = to.scrollHeight - to.clientHeight;
+    if (fromMax > 0 && toMax > 0) to.scrollTop = (from.scrollTop / fromMax) * toMax;
+    window.setTimeout(() => (syncLock = false), 60);
+  };
+  ta.addEventListener("scroll", () => {
+    if (shell.dataset.view === "split") sync(ta, preview);
+  });
+  preview.addEventListener("scroll", () => {
+    if (shell.dataset.view === "split") sync(preview, ta);
+  });
+
+  /* ─────────── 保存 / 删除 ─────────── */
+  const status = $("save-status");
+
+  async function save() {
     const button = $("save-btn") as HTMLButtonElement;
+    const topButton = $("save-btn-top") as HTMLButtonElement;
     const title = ($("f-title") as HTMLInputElement).value.trim();
-    const content = ($("f-content") as HTMLTextAreaElement).value.trim();
+    const content = ta.value.trim();
     if (!title || !content) {
       status.textContent = "标题和正文不能为空";
       status.style.color = "var(--color-red-500, #ef4444)";
       return;
     }
     button.disabled = true;
+    topButton.disabled = true;
     status.textContent = "保存中…";
     status.style.color = "";
     try {
@@ -194,11 +758,7 @@ const inputClass =
           content,
         }),
       });
-      let result: {
-        ok?: boolean;
-        message?: string;
-        deploy?: { triggered?: boolean; message?: string };
-      };
+      let result: { ok?: boolean; message?: string; deploy?: { triggered?: boolean; message?: string } };
       try {
         result = await response.json();
       } catch {
@@ -206,13 +766,9 @@ const inputClass =
       }
       if (result.ok) {
         const note = result.deploy?.message ?? "";
-        status.textContent = result.deploy?.triggered
-          ? `✓ 已保存。${note}`
-          : `✓ 已保存，但${note || "前台暂不会更新"}`;
-        status.style.color = result.deploy?.triggered
-          ? "var(--accent)"
-          : "var(--color-red-500, #ef4444)";
-        setTimeout(() => {
+        status.textContent = result.deploy?.triggered ? `✓ 已保存。${note}` : `✓ 已保存，但${note || "前台暂不会更新"}`;
+        status.style.color = result.deploy?.triggered ? "var(--accent)" : "var(--color-red-500, #ef4444)";
+        window.setTimeout(() => {
           location.href = "/admin/posts";
         }, result.deploy?.triggered ? 900 : 2600);
       } else {
@@ -224,10 +780,13 @@ const inputClass =
       status.style.color = "var(--color-red-500, #ef4444)";
     } finally {
       button.disabled = false;
+      topButton.disabled = false;
     }
-  });
+  }
 
-  // Delete
+  $("save-btn").addEventListener("click", save);
+  $("save-btn-top").addEventListener("click", save);
+
   $("delete-btn").addEventListener("click", async () => {
     if (!confirm("确定删除这篇文章吗？文章将移入回收站。")) return;
     const response = await fetch(`/api/admin/post?slug=${encodeURIComponent(originalSlug)}`, {
@@ -235,4 +794,43 @@ const inputClass =
     });
     if (response.ok) location.href = "/admin/posts";
   });
+
+  /* ─────────── 载入 ─────────── */
+  function afterLoad(value: string) {
+    ta.value = value;
+    history = [value];
+    hIndex = 0;
+    render();
+  }
+
+  if (originalSlug) {
+    $("editor-title").textContent = "编辑文章";
+    $("delete-btn").classList.remove("hidden");
+    (async () => {
+      const response = await fetch(`/api/admin/post?slug=${encodeURIComponent(originalSlug)}`);
+      if (response.status === 401) {
+        location.href = "/admin/login";
+        return;
+      }
+      const result = await response.json();
+      if (!result.ok) {
+        status.textContent = `加载失败：${result.message}`;
+        return;
+      }
+      const post: PostData = result.post;
+      const fm = post.frontmatter;
+      ($("f-title") as HTMLInputElement).value = String(fm.title ?? "");
+      ($("f-slug") as HTMLInputElement).value = post.slug;
+      ($("f-desc") as HTMLTextAreaElement).value = String(fm.description ?? "");
+      ($("f-tags") as HTMLInputElement).value = Array.isArray(fm.tags) ? (fm.tags as string[]).join(", ") : "";
+      ($("f-date") as HTMLInputElement).value = toLocalInput(String(fm.pubDatetime ?? ""));
+      ($("f-featured") as HTMLInputElement).checked = Boolean(fm.featured);
+      ($("f-draft") as HTMLInputElement).checked = Boolean(fm.draft);
+      afterLoad(post.content);
+      $("editor-sub").textContent = `正在编辑 src/data/blog/${post.slug}.md`;
+    })();
+  } else {
+    ($("f-date") as HTMLInputElement).value = toLocalInput(new Date().toISOString());
+    afterLoad("");
+  }
 </script>

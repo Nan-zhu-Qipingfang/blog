@@ -79,6 +79,134 @@ html {
   background: var(--bg-veil);
 }
 
+/* ─── 液态玻璃 / 毛玻璃（Liquid Glass，参照 iOS 26+ 系统 UI）───
+   统一在这里定义变量与工具类，卡片、顶栏、后台面板、弹窗都复用，
+   保证整站玻璃质感一致。模糊半径按"面积越大越轻"的原则取值，
+   避免大面积 backdrop-filter 拖垮滚动帧率。 */
+:root,
+html[data-theme="light"] {
+  --glass-blur: 18px;
+  --glass-blur-lg: 26px;
+  --glass-sat: 185%;
+  --glass-tint: color-mix(in srgb, var(--background) 58%, transparent);
+  --glass-tint-strong: color-mix(in srgb, var(--background) 78%, transparent);
+  --glass-border: color-mix(in srgb, var(--border) 30%, transparent);
+  --glass-highlight: rgba(255, 255, 255, 0.5);
+  --glass-shadow: 0 8px 28px -14px color-mix(in srgb, var(--foreground) 35%, transparent);
+  /* ── 统一圆角（方正处改大圆角）── */
+  --radius-card: 1.75rem;
+  --radius-panel: 2rem;
+  --radius-field: 1rem;
+}
+
+html[data-theme="dark"] {
+  --glass-tint: color-mix(in srgb, var(--background) 52%, transparent);
+  --glass-tint-strong: color-mix(in srgb, var(--background) 72%, transparent);
+  --glass-border: color-mix(in srgb, var(--border) 34%, transparent);
+  --glass-highlight: rgba(255, 255, 255, 0.16);
+  --glass-shadow: 0 10px 32px -14px rgba(0, 0, 0, 0.55);
+}
+
+/* 基础玻璃面：半透明底 + 模糊 + 1px 高光描边 + 柔和投影 */
+.glass {
+  position: relative;
+  background: var(--glass-tint);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    var(--glass-shadow);
+}
+
+/* 更"厚"的一层：弹窗 / 顶栏 / 悬浮面板用 */
+.glass-strong {
+  background: var(--glass-tint-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-sat));
+}
+
+/* 玻璃边缘的折射高光：用 mask 做一圈从上到下的渐变描边，
+   比单纯 border 更有"厚度感"，也是 iOS 液态玻璃的核心观感。 */
+.glass-specular::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    165deg,
+    var(--glass-highlight) 0%,
+    rgba(255, 255, 255, 0) 38%,
+    rgba(255, 255, 255, 0) 62%,
+    color-mix(in srgb, var(--glass-highlight) 45%, transparent) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* 玻璃按钮：按压下沉 + hover 增亮 */
+.glass-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-tint);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+  transition:
+    transform 0.22s cubic-bezier(0.34, 1.4, 0.64, 1),
+    background-color 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+.glass-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 6px 18px -10px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.glass-btn:active {
+  transform: scale(0.95);
+  transition-duration: 0.1s;
+}
+
+/* 表单控件统一大圆角 + 玻璃底 */
+.glass-field {
+  border-radius: var(--radius-field);
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+.glass-field:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-btn {
+    transition: none;
+  }
+}
+
 /* ─── 内容玻璃面板（对标 blog.liushen.fun）───
    所有页面主内容（main#main-content）浮在一块半透明圆角面板上，
    背景图从面板两侧与间隙透出。不用 backdrop-filter——大面积模糊
@@ -86,9 +214,68 @@ html {
 main#main-content {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
-  border-radius: 1.5rem;
-  box-shadow: 0 10px 36px -16px color-mix(in srgb, var(--background) 65%, transparent);
+  border-radius: var(--radius-panel);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 10px 36px -16px color-mix(in srgb, var(--background) 65%, transparent);
   padding-inline: 1.25rem;
+  /* 页面切换时主面板做一次轻微上浮淡入，配合 ClientRouter 更顺滑。
+     fill-mode 用 backwards：动画结束后不残留 transform，不影响子元素 hover。 */
+  animation: app-panel-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@keyframes app-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 列表页卡片依次浮现（前 10 张做阶梯延迟，之后统一延迟） */
+@keyframes app-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+main#main-content li.card-glow {
+  animation: app-card-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+main#main-content li.card-glow:nth-child(1) {
+  animation-delay: 0.03s;
+}
+main#main-content li.card-glow:nth-child(2) {
+  animation-delay: 0.08s;
+}
+main#main-content li.card-glow:nth-child(3) {
+  animation-delay: 0.13s;
+}
+main#main-content li.card-glow:nth-child(4) {
+  animation-delay: 0.18s;
+}
+main#main-content li.card-glow:nth-child(5) {
+  animation-delay: 0.23s;
+}
+main#main-content li.card-glow:nth-child(6) {
+  animation-delay: 0.28s;
+}
+main#main-content li.card-glow:nth-child(7) {
+  animation-delay: 0.33s;
+}
+main#main-content li.card-glow:nth-child(8) {
+  animation-delay: 0.38s;
+}
+main#main-content li.card-glow:nth-child(n + 9) {
+  animation-delay: 0.42s;
 }
 
 /* ─── 外挂标签（对标 hexo-theme-anzhiyu 的 scripts/tag + _tags/*.styl）───

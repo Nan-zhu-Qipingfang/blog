@@ -218,8 +218,8 @@ const since = SITE.since ?? "2021-01-01";
   }
 
   .console-panel {
-    @apply absolute top-12 right-0 z-50 w-80 rounded-2xl border border-border/20 p-4 shadow-xl shadow-foreground/10 backdrop-blur-md;
-    background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+    @apply absolute top-12 right-0 z-50 w-80 rounded-[1.6rem] border border-border/20 p-4 shadow-xl shadow-foreground/10 backdrop-blur-2xl;
+    background: color-mix(in srgb, var(--panel-bg) 78%, transparent);
     transform-origin: top right;
     animation: console-in 0.32s cubic-bezier(0.34, 1.4, 0.64, 1);
   }

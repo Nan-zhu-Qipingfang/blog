@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import sitemap from "@astrojs/sitemap";
 import remarkToc from "remark-toc";
 import remarkCollapse from "remark-collapse";
+import remarkBreaks from "remark-breaks";
 import {
   transformerNotationDiff,
   transformerNotationHighlight,
@@ -40,6 +41,8 @@ export default defineConfig({
     remarkPlugins: [
       remarkToc,
       [remarkCollapse, { test: "Table of contents" }],
+      // 让 md 里的单换行渲染为 <br>（对齐前博客七七小栈的显示习惯）
+      remarkBreaks,
       // 安知鱼（hexo-theme-anzhiyu）外挂标签：audio / video / videos / tip / hide*
       remarkAnzhiyuTags,
     ],

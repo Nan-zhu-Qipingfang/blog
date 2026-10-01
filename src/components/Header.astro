@@ -248,14 +248,53 @@ const isActive = (path: string) => {
     background: transparent;
   }
   
+  /* 滚动后：整条顶栏变成一块"悬浮的液态玻璃圆角条"，
+     底部大圆角 + 高饱和模糊 + 顶部折射高光，对齐 iOS 系统栏观感 */
   :global(.header-scrolled) {
-    background: color-mix(in srgb, var(--background) 80%, transparent) !important;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+    background: transparent !important;
+    box-shadow: none;
   }
 
   :global(.header-scrolled .header-scrolled-filter) {
-    backdrop-filter: blur(10px) saturate(140%);
-    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    position: relative;
+    background: var(--glass-tint-strong);
+    backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-sat));
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-sat));
+    border: 1px solid var(--glass-border);
+    border-top: 0;
+    border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      0 10px 30px -16px color-mix(in srgb, var(--foreground) 45%, transparent);
+    transition:
+      background-color 0.3s ease,
+      border-radius 0.3s ease,
+      box-shadow 0.3s ease;
+  }
+
+  /* 顶栏玻璃条的折射描边（与 .glass-specular 同思路，但只在底部两侧） */
+  :global(.header-scrolled .header-scrolled-filter)::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      180deg,
+      var(--glass-highlight) 0%,
+      rgba(255, 255, 255, 0) 45%,
+      rgba(255, 255, 255, 0) 70%,
+      color-mix(in srgb, var(--glass-highlight) 40%, transparent) 100%
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
   }
 
   .nav-logo-text {

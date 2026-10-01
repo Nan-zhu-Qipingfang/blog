@@ -82,13 +82,14 @@ if (SITE.showCoverImages) {
 
 <li
   class:list={[
-    "card-glow group/card relative my-3 rounded-2xl",
+    // 大圆角（--radius-card）+ 液态玻璃折射高光
+    "card-glow glass-specular group/card relative my-3 rounded-[var(--radius-card)]",
     // Use overflow-hidden when cover image is shown so the image respects border-radius
     coverSrc ? "overflow-hidden" : "",
-    "border backdrop-blur-sm",
+    "border backdrop-blur-xl",
     "transition-[border-color,background-color,box-shadow,transform] duration-300 ease-out motion-reduce:transform-none motion-reduce:transition-none",
-    "hover:-translate-y-0.5 focus-within:-translate-y-0.5",
-    "hover:shadow-lg focus-within:shadow-lg",
+    "hover:-translate-y-1 focus-within:-translate-y-1",
+    "hover:shadow-xl focus-within:shadow-xl",
 
     // Default posts styling
     !isGallery && !featured && [
@@ -123,7 +124,7 @@ if (SITE.showCoverImages) {
 >
   <!-- Cursor-following glow -->
   <div
-    class="card-glow-effect pointer-events-none absolute inset-0 z-0 rounded-2xl opacity-0 transition-opacity duration-300 motion-reduce:transition-none group-hover/card:opacity-100 group-focus-within/card:opacity-100"
+    class="card-glow-effect pointer-events-none absolute inset-0 z-0 rounded-[var(--radius-card)] opacity-0 transition-opacity duration-300 motion-reduce:transition-none group-hover/card:opacity-100 group-focus-within/card:opacity-100"
     aria-hidden="true"
   >
   </div>
