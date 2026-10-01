@@ -138,7 +138,20 @@ cpSync(_staticDir, "./.vercel/output/static/", { recursive: true });
 Pagefind 在构建时索引 `dist` 下的**静态** HTML，因此已预渲染的博客内容可被站内搜索检索；管理后台等动态路由不会进入搜索索引（这是正确的行为）。
 
 ### 4. 音乐胶囊（可选）
-音乐接口走的是网易云公开 API，部分歌曲音频 CDN 为 `http://` 协议。若站点启用了 HTTPS 且浏览器拦截了混合内容导致无法播放，可在后台接入支持 HTTPS 的音频源，或让音乐接口统一返回 HTTPS 链接。
+音乐接口走网易云公开 API。网易云外链会 302 跳到 `http://` 的 CDN，项目已通过自建的 `/api/music/stream?id=` 在服务端解析跳转并强制升级为 `https://`，因此不存在混合内容问题；接口还会先做可播性预检，跳过外链已失效的歌曲。
+
+### 4.1 导入 MD / 保存文章报 `EROFS: read-only file system`
+报错形如：
+
+```
+EROFS: read-only file system, open '/var/task/src/data/blog/xxx.md'
+```
+
+**原因**：`KV_REST_API_URL` / `KV_REST_API_TOKEN` 没有注入，代码判定 KV 未启用，于是回退到"写本地 markdown 文件"，而 Vercel 的 `/var/task` 是只读的 → EROFS。
+
+**解决**：回到 **3.1** 绑定 Redis(Upstash) 数据库并 **Redeploy**。绑定后可在后台「设置」页看到「数据存储状态」变为绿色的"KV 存储已启用"。
+
+现在代码也会提前拦截这种情况：未启用 KV 时导入接口直接返回 503 + 中文说明，不会再抛裸的 EROFS。
 
 ### 5. 自定义域名
 在 Vercel 项目 **Settings → Domains** 中添加你的域名，按提示配置 DNS（CNAME 指向 `cname.vercel-dns.com` 或添加 TXT 验证），Vercel 会自动签发 SSL 证书。

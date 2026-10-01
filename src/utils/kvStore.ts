@@ -26,6 +26,19 @@ export const kvEnabled = Boolean(REST_URL && REST_TOKEN);
 
 const LOCAL_DIR = path.resolve(".data/kv");
 
+/** Common guard: Vercel's filesystem is read-only, so any write that falls back
+ *  to local files is guaranteed to fail with EROFS. Failing early with a clear
+ *  message is much better than a cryptic filesystem error. */
+function guardServerlessWrite(): void {
+  if (kvEnabled) return;
+  if (process.env.VERCEL || process.env.VERCEL_ENV) {
+    throw new Error(
+      "Vercel 文件系统为只读，必须先在项目设置里绑定 Redis(Upstash) 数据库，" +
+        "让 KV_REST_API_URL / KV_REST_API_TOKEN 自动注入，然后重新部署。"
+    );
+  }
+}
+
 function localFile(key: string): string {
   const safe = key.replace(/[^a-zA-Z0-9_-]/g, "__");
   return path.join(LOCAL_DIR, `${safe}.json`);
@@ -35,7 +48,8 @@ async function rest(command: string): Promise<unknown> {
   const res = await fetch(`${REST_URL}/${command}`, {
     headers: { Authorization: `Bearer ${REST_TOKEN}` },
   });
-  if (!res.ok) throw new Error(`KV ${command.split("/")[0]} failed: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`KV ${command.split("/")[0]} failed: ${res.status}`);
   const json = (await res.json()) as { result?: unknown; error?: string };
   if (json?.error) throw new Error(`KV error: ${json.error}`);
   return json?.result;
@@ -61,6 +75,7 @@ export async function kvGet<T>(key: string, fallback: T): Promise<T> {
 
 /** Write a JSON value. Throws on failure so callers can surface errors. */
 export async function kvSet(key: string, value: unknown): Promise<void> {
+  guardServerlessWrite();
   const payload = JSON.stringify(value);
   if (kvEnabled) {
     await rest(`set/${encodeURIComponent(key)}/${encodeURIComponent(payload)}`);
@@ -71,6 +86,7 @@ export async function kvSet(key: string, value: unknown): Promise<void> {
 }
 
 export async function kvDel(key: string): Promise<void> {
+  guardServerlessWrite();
   if (kvEnabled) {
     await rest(`del/${encodeURIComponent(key)}`);
     return;
@@ -95,9 +111,14 @@ export async function kvKeys(pattern: string): Promise<string[]> {
   try {
     const files = await fs.readdir(LOCAL_DIR);
     const rx = new RegExp(
-      "^" + pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, ".*") + "$",
+      "^" +
+        pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, ".*") +
+        "$"
     );
-    return files.filter(f => f.endsWith(".json")).map(f => f.replace(/\.json$/, "")).filter(f => rx.test(f));
+    return files
+      .filter(f => f.endsWith(".json"))
+      .map(f => f.replace(/\.json$/, ""))
+      .filter(f => rx.test(f));
   } catch {
     return [];
   }
@@ -109,7 +130,7 @@ export async function kvKeys(pattern: string): Promise<string[]> {
  */
 export function jsonStore(file: string, key: string) {
   return {
-    read: async <T,>(fallback: T): Promise<T> => {
+    read: async <T>(fallback: T): Promise<T> => {
       if (kvEnabled) return kvGet<T>(key, fallback);
       try {
         return JSON.parse(await fs.readFile(file, "utf-8")) as T;
@@ -119,6 +140,7 @@ export function jsonStore(file: string, key: string) {
     },
     write: async (data: unknown): Promise<void> => {
       if (kvEnabled) return kvSet(key, data);
+      guardServerlessWrite();
       await fs.mkdir(path.dirname(file), { recursive: true });
       await fs.writeFile(file, JSON.stringify(data, null, 2), "utf-8");
     },

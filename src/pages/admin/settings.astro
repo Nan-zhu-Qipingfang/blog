@@ -9,6 +9,7 @@ if (!(await isAuthed(Astro.cookies))) {
   return Astro.redirect("/admin/login");
 }
 import { passwordSource } from "@/utils/adminAuth";
+import { kvEnabled } from "@/utils/kvStore";
 
 const source = await passwordSource();
 const sourceText: Record<typeof source, string> = {
@@ -16,6 +17,13 @@ const sourceText: Record<typeof source, string> = {
   env: "当前使用环境变量 ADMIN_PASSWORD 中配置的密码",
   none: "尚未配置任何密码：请在 .env 或部署平台的环境变量中设置 ADMIN_PASSWORD，否则将无法登录",
 };
+
+// Vercel's filesystem is read-only — without KV every write (import, save,
+// logs) fails. Surface it here so the cause is obvious.
+const storageOk = kvEnabled;
+const storageText = storageOk
+  ? "KV 存储已启用：文章、日志正常持久化，保存后会自动触发重新部署。"
+  : "未检测到 KV 存储（KV_REST_API_URL / KV_REST_API_TOKEN）。线上文件系统只读，导入与保存文章会失败。请在 Vercel 项目设置里绑定 Redis(Upstash) 数据库并重新部署。";
 
 const inputClass =
   "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60";
@@ -28,17 +36,34 @@ const inputClass =
       <p class="mt-1 text-sm text-foreground/50">后台账号与运行说明</p>
     </header>
 
-    <section class="rounded-2xl border border-border/60 bg-card/60 p-5">
+    <section class="bg-card/60 rounded-2xl border border-border/60 p-5">
       <h2 class="mb-1 text-sm font-bold">修改管理员密码</h2>
       <p class="mb-4 text-xs text-foreground/45">{sourceText[source]}</p>
       <form id="password-form" class="flex max-w-sm flex-col gap-3">
         <label class="block">
-          <span class="mb-1.5 block text-xs font-medium text-foreground/60">旧密码</span>
-          <input name="oldPassword" type="password" required class={inputClass} autocomplete="current-password" />
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60"
+            >旧密码</span
+          >
+          <input
+            name="oldPassword"
+            type="password"
+            required
+            class={inputClass}
+            autocomplete="current-password"
+          />
         </label>
         <label class="block">
-          <span class="mb-1.5 block text-xs font-medium text-foreground/60">新密码（至少 6 位）</span>
-          <input name="newPassword" type="password" required minlength="6" class={inputClass} autocomplete="new-password" />
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60"
+            >新密码（至少 6 位）</span
+          >
+          <input
+            name="newPassword"
+            type="password"
+            required
+            minlength="6"
+            class={inputClass}
+            autocomplete="new-password"
+          />
         </label>
         <p id="password-status" class="hidden rounded-lg px-3 py-2 text-xs"></p>
         <button
@@ -50,7 +75,21 @@ const inputClass =
       </form>
     </section>
 
-    <section class="mt-4 rounded-2xl border border-border/60 bg-card/60 p-5">
+    <section class="bg-card/60 mt-4 rounded-2xl border border-border/60 p-5">
+      <h2 class="mb-1 text-sm font-bold">数据存储状态</h2>
+      <p class="mt-2 flex items-start gap-2 text-xs">
+        <span
+          class:list={[
+            "mt-1 inline-block h-2 w-2 shrink-0 rounded-full",
+            storageOk ? "bg-emerald-500" : "bg-red-500",
+          ]}></span>
+        <span class={storageOk ? "text-foreground/55" : "text-red-500/90"}
+          >{storageText}</span
+        >
+      </p>
+    </section>
+
+    <section class="bg-card/60 mt-4 rounded-2xl border border-border/60 p-5">
       <h2 class="mb-1 text-sm font-bold">快捷导航配置（指纹菜单）</h2>
       <p class="mb-4 text-xs text-foreground/45">
         首页顶栏指纹图标弹出的快捷导航（如云盘、相册），保存后前台点击时即时生效。
@@ -71,45 +110,70 @@ const inputClass =
         >
           保存导航
         </button>
-        <span id="links-status" class="hidden rounded-lg px-3 py-1.5 text-xs"></span>
+        <span id="links-status" class="hidden rounded-lg px-3 py-1.5 text-xs"
+        ></span>
       </div>
     </section>
 
-    <section class="mt-4 rounded-2xl border border-border/60 bg-card/60 p-5">
+    <section class="bg-card/60 mt-4 rounded-2xl border border-border/60 p-5">
       <h2 class="mb-2 text-sm font-bold">关于本后台</h2>
-      <ul class="flex flex-col gap-2 text-xs leading-relaxed text-foreground/55">
-        <li>· 前台保持纯静态输出，仅 <code class="font-firacode">/admin</code> 与 <code class="font-firacode">/api/admin/*</code> 走 Node 服务端按需渲染（@astrojs/node，standalone 模式）。</li>
-        <li>· 文章即 <code class="font-firacode">src/data/blog/*.md</code>，后台的增删改直接读写这些文件；开发模式下前台即时热更新，生产部署后需重新构建。</li>
-        <li>· 删除的文章移入 <code class="font-firacode">src/data/admin/trash/</code>，可手动找回。</li>
-        <li>· 会话凭据为 HttpOnly Cookie（HMAC 签名，7 天有效），密钥自动生成于 <code class="font-firacode">src/data/admin/secret.key</code>，也可用环境变量 <code class="font-firacode">ADMIN_SECRET</code> 固定。</li>
-        <li>· 灵感来自《近期开发的四个开源项目》中 hubProxy / Artalk 的后台设计：仪表盘、日志、设置集中管理。</li>
+      <ul
+        class="flex flex-col gap-2 text-xs leading-relaxed text-foreground/55"
+      >
+        <li>
+          · 前台保持纯静态输出，仅 <code class="font-firacode">/admin</code> 与 <code
+            class="font-firacode">/api/admin/*</code
+          > 走 Node 服务端按需渲染（@astrojs/node，standalone 模式）。
+        </li>
+        <li>
+          · 文章即 <code class="font-firacode">src/data/blog/*.md</code
+          >，后台的增删改直接读写这些文件；开发模式下前台即时热更新，生产部署后需重新构建。
+        </li>
+        <li>
+          · 删除的文章移入 <code class="font-firacode"
+            >src/data/admin/trash/</code
+          >，可手动找回。
+        </li>
+        <li>
+          · 会话凭据为 HttpOnly Cookie（HMAC 签名，7 天有效），密钥自动生成于 <code
+            class="font-firacode">src/data/admin/secret.key</code
+          >，也可用环境变量 <code class="font-firacode">ADMIN_SECRET</code> 固定。
+        </li>
+        <li>
+          · 灵感来自《近期开发的四个开源项目》中 hubProxy / Artalk
+          的后台设计：仪表盘、日志、设置集中管理。
+        </li>
       </ul>
     </section>
   </div>
 </AdminLayout>
 
 <script>
-  document.getElementById("password-form")?.addEventListener("submit", async event => {
-    event.preventDefault();
-    const form = event.currentTarget as HTMLFormElement;
-    const status = document.getElementById("password-status");
-    const data = new FormData(form);
-    const response = await fetch("/api/admin/password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        oldPassword: data.get("oldPassword"),
-        newPassword: data.get("newPassword"),
-      }),
+  document
+    .getElementById("password-form")
+    ?.addEventListener("submit", async event => {
+      event.preventDefault();
+      const form = event.currentTarget as HTMLFormElement;
+      const status = document.getElementById("password-status");
+      const data = new FormData(form);
+      const response = await fetch("/api/admin/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          oldPassword: data.get("oldPassword"),
+          newPassword: data.get("newPassword"),
+        }),
+      });
+      const result = await response.json();
+      if (status) {
+        status.textContent = result.ok
+          ? "✓ 密码已更新，下次登录生效"
+          : (result.message ?? "修改失败");
+        status.classList.remove("hidden");
+        status.className = `rounded-lg px-3 py-2 text-xs ${result.ok ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-500"}`;
+      }
+      if (result.ok) form.reset();
     });
-    const result = await response.json();
-    if (status) {
-      status.textContent = result.ok ? "✓ 密码已更新，下次登录生效" : (result.message ?? "修改失败");
-      status.classList.remove("hidden");
-      status.className = `rounded-lg px-3 py-2 text-xs ${result.ok ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-500"}`;
-    }
-    if (result.ok) form.reset();
-  });
 
   /* ── Portal quick links (fingerprint menu) ─────────────────────────── */
 
@@ -124,7 +188,9 @@ const inputClass =
       <input name="link-url" placeholder="https://…" value="${url}" class="flex-1 rounded-xl border border-border bg-background px-3 py-2 font-firacode text-sm outline-none transition-colors focus:border-accent/60" />
       <button type="button" data-remove class="cursor-pointer rounded-lg px-2 py-1 text-xs text-red-500/70 transition-colors hover:bg-red-500/10 hover:text-red-500">删除</button>
     `;
-    row.querySelector("[data-remove]")?.addEventListener("click", () => row.remove());
+    row
+      .querySelector("[data-remove]")
+      ?.addEventListener("click", () => row.remove());
     return row;
   }
 
@@ -138,7 +204,7 @@ const inputClass =
     if (linksRows) {
       linksRows.innerHTML = "";
       (j.links ?? []).forEach((l: { name: string; url: string }) =>
-        linksRows.appendChild(linkRow(l.name, l.url)),
+        linksRows.appendChild(linkRow(l.name, l.url))
       );
     }
   }
@@ -148,10 +214,17 @@ const inputClass =
   });
 
   document.getElementById("save-links")?.addEventListener("click", async () => {
-    const names = [...(linksRows?.querySelectorAll("[name=link-name]") ?? [])] as HTMLInputElement[];
-    const urls = [...(linksRows?.querySelectorAll("[name=link-url]") ?? [])] as HTMLInputElement[];
+    const names = [
+      ...(linksRows?.querySelectorAll("[name=link-name]") ?? []),
+    ] as HTMLInputElement[];
+    const urls = [
+      ...(linksRows?.querySelectorAll("[name=link-url]") ?? []),
+    ] as HTMLInputElement[];
     const links = names
-      .map((n, i) => ({ name: n.value.trim(), url: (urls[i]?.value ?? "").trim() }))
+      .map((n, i) => ({
+        name: n.value.trim(),
+        url: (urls[i]?.value ?? "").trim(),
+      }))
       .filter(l => l.name && l.url);
     const res = await fetch("/api/admin/links", {
       method: "POST",
@@ -160,7 +233,9 @@ const inputClass =
     });
     const j = await res.json();
     if (linksStatus) {
-      linksStatus.textContent = j.ok ? "✓ 已保存，前台点击指纹图标即可看到" : (j.error ?? "保存失败");
+      linksStatus.textContent = j.ok
+        ? "✓ 已保存，前台点击指纹图标即可看到"
+        : (j.error ?? "保存失败");
       linksStatus.classList.remove("hidden");
       linksStatus.className = `rounded-lg px-3 py-1.5 text-xs ${j.ok ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-500"}`;
       window.setTimeout(() => linksStatus.classList.add("hidden"), 3000);

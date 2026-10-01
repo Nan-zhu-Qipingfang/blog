@@ -21,6 +21,17 @@ const ADMIN_DIR = path.resolve("src/data/admin");
 const TRASH_DIR = path.join(ADMIN_DIR, "trash");
 const LOG_FILE = path.join(ADMIN_DIR, "logs.json");
 
+/** Used in Vercel serverless when KV is not configured. */
+export function requireKvOnServerless(): void {
+  if (kvEnabled) return;
+  if (process.env.VERCEL || process.env.VERCEL_ENV) {
+    throw new Error(
+      "Vercel 文件系统为只读，必须先在项目设置里绑定 Redis(Upstash) 数据库，" +
+        "让 KV_REST_API_URL / KV_REST_API_TOKEN 自动注入，然后重新部署。"
+    );
+  }
+}
+
 export type PostMeta = {
   slug: string;
   title: string;
@@ -47,7 +58,9 @@ export function safeSlug(slug: string): string {
 
 function toIsoDate(value: unknown, fallback = new Date()): string {
   const date = value instanceof Date ? value : new Date(String(value ?? ""));
-  return Number.isNaN(date.getTime()) ? fallback.toISOString() : date.toISOString();
+  return Number.isNaN(date.getTime())
+    ? fallback.toISOString()
+    : date.toISOString();
 }
 
 /** Serialize frontmatter by hand so datetime stays unquoted (YAML date). */
@@ -56,11 +69,16 @@ function buildFrontmatter(fm: Record<string, unknown>): string {
   lines.push(`title: ${JSON.stringify(String(fm.title ?? "无题"))}`);
   lines.push(`description: ${JSON.stringify(String(fm.description ?? ""))}`);
   lines.push(`author: ${JSON.stringify(String(fm.author ?? "南烛"))}`);
-  lines.push(`pubDatetime: ${toIsoDate(fm.pubDatetime).replace(/\.\d{3}Z$/, "Z")}`);
+  lines.push(
+    `pubDatetime: ${toIsoDate(fm.pubDatetime).replace(/\.\d{3}Z$/, "Z")}`
+  );
   if (fm.modDatetime) {
-    lines.push(`modDatetime: ${toIsoDate(fm.modDatetime).replace(/\.\d{3}Z$/, "Z")}`);
+    lines.push(
+      `modDatetime: ${toIsoDate(fm.modDatetime).replace(/\.\d{3}Z$/, "Z")}`
+    );
   }
-  const tags = Array.isArray(fm.tags) && fm.tags.length ? fm.tags.map(String) : ["others"];
+  const tags =
+    Array.isArray(fm.tags) && fm.tags.length ? fm.tags.map(String) : ["others"];
   lines.push("tags:");
   for (const tag of tags) lines.push(`  - ${JSON.stringify(tag)}`);
   lines.push(`featured: ${Boolean(fm.featured)}`);
@@ -107,13 +125,18 @@ export async function listPosts(): Promise<PostMeta[]> {
     }
   }
   return posts.sort(
-    (a, b) => new Date(b.pubDatetime).getTime() - new Date(a.pubDatetime).getTime(),
+    (a, b) =>
+      new Date(b.pubDatetime).getTime() - new Date(a.pubDatetime).getTime()
   );
 }
 
 export async function getPost(
-  slug: string,
-): Promise<{ slug: string; frontmatter: Record<string, unknown>; content: string } | null> {
+  slug: string
+): Promise<{
+  slug: string;
+  frontmatter: Record<string, unknown>;
+  content: string;
+} | null> {
   const safe = safeSlug(slug);
   if (!safe) return null;
   if (kvEnabled) {
@@ -150,6 +173,8 @@ export async function savePost(input: {
 }): Promise<{ slug: string }> {
   const slug = safeSlug(input.slug);
   if (!slug) throw new Error("slug 无效：只能包含字母、数字和连字符");
+  requireKvOnServerless();
+
   const fm = {
     title: input.title,
     description: input.description,

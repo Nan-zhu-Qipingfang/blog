@@ -4,6 +4,7 @@ import type { APIRoute } from "astro";
 import matter from "gray-matter";
 import { isAuthed } from "@/utils/adminAuth";
 import { appendLog, getPost, savePost } from "@/utils/adminStore";
+import { kvEnabled } from "@/utils/kvStore";
 import { slugify } from "@/utils/slug";
 
 const unauthorized = () =>
@@ -66,6 +67,21 @@ function toStringList(value: unknown): string[] {
  */
 export const POST: APIRoute = async Astro => {
   if (!(await isAuthed(Astro.cookies))) return unauthorized();
+
+  // Vercel's filesystem is read-only. Without KV the write below would only
+  // fail much later with a cryptic EROFS, so refuse up front with a message
+  // that actually tells you what to fix.
+  if (!kvEnabled) {
+    return json(
+      {
+        ok: false,
+        message:
+          "线上未启用 KV 存储：请在 Vercel 项目设置里绑定 Redis(Upstash) 数据库，" +
+          "让 KV_REST_API_URL / KV_REST_API_TOKEN 自动注入，然后重新部署。",
+      },
+      503
+    );
+  }
 
   let body: { files?: unknown; overwrite?: unknown };
   try {
