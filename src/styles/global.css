@@ -561,6 +561,9 @@ div.videos[col="4"] > iframe {
 .vg-frame > .vg-video {
   position: absolute;
   inset: 0;
+  /* 基础样式表给所有 video 加了 margin: 2em 0，绝对定位下它会把画面顶下去、
+     底部再被 overflow:hidden 裁掉一截，框上方就露出一条黑边 */
+  margin: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
