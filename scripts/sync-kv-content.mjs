@@ -136,12 +136,14 @@ function excerpt(content) {
  */
 function normalize(raw, slug) {
   const { data, content } = matter(raw);
-  const description = String(
-    data.description ?? data.desc ?? data.summary ?? ""
-  ).trim();
+  const description = String(data.description ?? data.desc ?? "").trim();
   return matter.stringify(content, {
     title: String(data.title ?? slug),
     description: description || excerpt(content),
+    // AI 摘要由后台生成，构建期原样带回来（空值会被 collection schema 忽略）
+    ...(String(data.summary ?? "").trim()
+      ? { summary: String(data.summary).trim() }
+      : {}),
     author: String(data.author ?? "南烛"),
     pubDatetime: toIsoDate(data.pubDatetime ?? data.date ?? data.published),
     ...(data.modDatetime || data.updated || data.lastmod

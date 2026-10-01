@@ -20,6 +20,8 @@ const blog = defineCollection({
       ogImage: image().or(z.string()).optional(),
       coverImage: image().optional(),
       description: z.string(),
+      /** 后台 AI 摘要（或手写摘要），仅文章页使用，列表页仍走 description */
+      summary: z.string().optional(),
       canonicalURL: z.string().optional(),
       hideEditPost: z.boolean().optional(),
       timezone: z.string().optional(),

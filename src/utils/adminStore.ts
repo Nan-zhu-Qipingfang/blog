@@ -38,6 +38,8 @@ export type PostMeta = {
   slug: string;
   title: string;
   description: string;
+  /** AI 摘要（或线下手写的摘要），优先于 description */
+  summary: string;
   tags: string[];
   author: string;
   pubDatetime: string;
@@ -70,6 +72,9 @@ function buildFrontmatter(fm: Record<string, unknown>): string {
   const lines: string[] = ["---"];
   lines.push(`title: ${JSON.stringify(String(fm.title ?? "无题"))}`);
   lines.push(`description: ${JSON.stringify(String(fm.description ?? ""))}`);
+  // AI 摘要：只在有值时才写，空字符串会把已有摘要抹掉
+  const summary = String(fm.summary ?? "").trim();
+  if (summary) lines.push(`summary: ${JSON.stringify(summary)}`);
   lines.push(`author: ${JSON.stringify(String(fm.author ?? "南烛"))}`);
   lines.push(
     `pubDatetime: ${toIsoDate(fm.pubDatetime).replace(/\.\d{3}Z$/, "Z")}`
@@ -96,6 +101,7 @@ function parsePostFile(fileName: string, raw: string): PostMeta | null {
     slug: fileName.replace(/\.mdx?$/i, ""),
     title: String(data.title ?? fileName),
     description: String(data.description ?? ""),
+    summary: String(data.summary ?? ""),
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
     author: String(data.author ?? "南烛"),
     pubDatetime: toIsoDate(data.pubDatetime),
@@ -238,6 +244,71 @@ export async function savePost(input: {
     await fs.rm(path.join(BLOG_DIR, `${old}.mdx`), { force: true });
   }
   return { slug };
+}
+
+/**
+ * Rewrite *only* the `summary` line of a raw markdown file's frontmatter.
+ *
+ * `matter.stringify()` normalises the whole YAML block — it drops the quotes
+ * around `title`, rewrites timestamps, drops the blank line after `---`, and
+ * generally reorders everything. Since a summary is written on every save, that
+ * churn would accumulate across the whole blog, so we patch the single line
+ * textually and leave the rest of the file byte-for-byte identical.
+ */
+function withSummaryField(raw: string, summary: string): string {
+  const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n([\s\S]*))?$/.exec(raw);
+  if (!match) return raw; // 没有 frontmatter，原样返回
+  const fmText = match[1];
+  const rest = match[2] ?? "";
+  const lines = fmText.split("\n");
+  // JSON.stringify 产出的双引号标量是合法 YAML，且能安全承载换行/引号/emoji
+  const value = summary ? `summary: ${JSON.stringify(summary)}` : "";
+
+  let keyAt = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^summary[ \t]*:/.test(lines[i])) {
+      keyAt = i;
+      break;
+    }
+  }
+  if (keyAt >= 0) {
+    if (!summary) lines.splice(keyAt, 1);
+    else lines[keyAt] = value;
+  } else if (summary) {
+    // 插到最后一个顶层键之后，保持阅读顺序稳定
+    let last = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (/^[^\s#][^:#]*:[ \t]/.test(lines[i]) || /^[^\s#][^:#]*:$/.test(lines[i])) last = i;
+    }
+    lines.splice(last + 1, 0, value);
+  }
+  return `---\n${lines.join("\n")}\n---${rest ? `\n${rest}` : "\n"}`;
+}
+
+/**
+ * Write the AI summary into a post's frontmatter (`summary` field) without
+ * touching the body. Used by the editor's "generate summary" flow, which
+ * already saved the post and only wants to enrich it afterwards.
+ */
+export async function setPostSummary(
+  slug: string,
+  summary: string
+): Promise<{ slug: string }> {
+  const safe = safeSlug(slug);
+  if (!safe) throw new Error("slug 无效");
+  requireKvOnServerless();
+
+  const raws = await allRawPosts();
+  const raw = raws.get(safe);
+  if (!raw) throw new Error("文章不存在，请先保存文章再生成摘要");
+  const body = withSummaryField(raw, summary);
+  if (kvEnabled) {
+    await kvSet(`blog:post:${safe}`, body);
+    return { slug: safe };
+  }
+  await fs.mkdir(BLOG_DIR, { recursive: true });
+  await fs.writeFile(path.join(BLOG_DIR, `${safe}.md`), body, "utf-8");
+  return { slug: safe };
 }
 
 /** Soft delete: move the markdown file into the admin trash folder. */

@@ -11,6 +11,7 @@ if (!(await isAuthed(Astro.cookies))) {
 import { passwordSource } from "@/utils/adminAuth";
 import { kvEnabled, kvProbe, kvStatus } from "@/utils/kvStore";
 import { deployHookConfigured } from "@/utils/redeploy";
+import { getAiConfig, getUsageStats, PRESETS } from "@/utils/aiSummary";
 
 const source = await passwordSource();
 const sourceText: Record<typeof source, string> = {
@@ -56,6 +57,14 @@ const probe = await kvProbe();
 
 const inputClass =
   "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60";
+
+const aiConfig = await getAiConfig();
+const aiUsage = await getUsageStats();
+const aiPresets = Object.entries(PRESETS).map(([id, p]) => ({
+  id,
+  label: p.label,
+  authMode: p.authMode,
+}));
 ---
 
 <AdminLayout>
@@ -171,6 +180,258 @@ const inputClass =
           </dd>
         </div>
       </dl>
+    </section>
+
+    <section class="bg-card/60 mt-4 rounded-2xl border border-border/60 p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-sm font-bold">AI 摘要</h2>
+        <label class="flex cursor-pointer items-center gap-2 text-xs text-foreground/60">
+          <input
+            id="ai-enabled"
+            type="checkbox"
+            class="size-4 accent-[var(--accent)]"
+            checked={aiConfig.enabled}
+          />
+          启用线上 AI 生成
+        </label>
+      </div>
+      <p class="mt-2 text-xs leading-relaxed text-foreground/45">
+        开启后，在「撰写文章」保存时会弹出「是否生成 AI 摘要」，可选择
+        <strong class="font-semibold text-foreground/60">线上生成</strong>（调用下面配置的接口）或
+        <strong class="font-semibold text-foreground/60">线下手写</strong>。
+        摘要会写进文章 frontmatter 的 <code class="font-firacode text-accent/80">summary</code>
+        字段，静态构建不再重复调用接口。
+      </p>
+
+      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">接口预设</span>
+          <select id="ai-preset" class={inputClass}>
+            {
+              aiPresets.map(p => (
+                <option value={p.id} selected={aiConfig.preset === p.id}>
+                  {p.label}
+                </option>
+              ))
+            }
+            <option value="custom" selected={aiConfig.preset === "custom"}>
+              自定义（手写模板）
+            </option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">模型名</span>
+          <input
+            id="ai-model"
+            type="text"
+            class={inputClass + " font-firacode"}
+            value={aiConfig.model}
+            placeholder="gemini-3.1-pro"
+          />
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">鉴权方式</span>
+          <select id="ai-auth" class={inputClass}>
+            {
+              [
+                ["bearer", "Authorization: Bearer"],
+                ["x-goog-api-key", "x-goog-api-key"],
+                ["query-key", "URL 查询参数 ?key="],
+                ["none", "不需要鉴权"],
+              ].map(([v, label]) => (
+                <option value={v} selected={aiConfig.authMode === v}>
+                  {label}
+                </option>
+              ))
+            }
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">API Key</span>
+          <input
+            id="ai-key"
+            type="password"
+            class={inputClass + " font-firacode"}
+            placeholder={aiConfig.apiKey ? aiConfig.apiKey : "sk-…"}
+            value=""
+          />
+        </label>
+      </div>
+
+      <label class="mt-3 block">
+        <span class="mb-1.5 block text-xs font-medium text-foreground/60"
+          >请求地址 URL（可含 <code class="font-firacode text-accent/80">{"{{model}}"}</code>
+          占位，Gemini 原生接口需占位）</span
+        >
+        <input
+          id="ai-url"
+          type="text"
+          class={inputClass + " font-firacode"}
+          value={aiConfig.apiUrl}
+          placeholder="https://your-gateway.example.com/v1/chat/completions"
+        />
+      </label>
+
+      <label class="mt-3 block">
+        <span class="mb-1.5 block text-xs font-medium text-foreground/60"
+          >请求体模板（JSON，用 <code class="font-firacode text-accent/80">{"{{content}}"}</code>
+          和 <code class="font-firacode text-accent/80">{"{{model}}"}</code> 占位）</span
+        >
+        <textarea
+          id="ai-template"
+          rows="9"
+          spellcheck="false"
+          class={inputClass + " resize-y font-firacode text-xs leading-relaxed"}
+        >{aiConfig.requestTemplate}</textarea>
+      </label>
+
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">响应解析路径</span>
+          <input
+            id="ai-response"
+            type="text"
+            class={inputClass + " font-firacode text-xs"}
+            value={aiConfig.responsePath}
+            placeholder="choices[0].message.content"
+          />
+        </label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-foreground/60">Prompt token 路径</span>
+            <input
+              id="ai-usage-p"
+              type="text"
+              class={inputClass + " font-firacode text-xs"}
+              value={aiConfig.usagePromptPath}
+              placeholder="usage.prompt_tokens"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-foreground/60">Completion 路径</span>
+            <input
+              id="ai-usage-c"
+              type="text"
+              class={inputClass + " font-firacode text-xs"}
+              value={aiConfig.usageCompletionPath}
+              placeholder="usage.completion_tokens"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div class="mt-3 grid grid-cols-3 gap-3">
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">正文 token 预算</span>
+          <input
+            id="ai-budget"
+            type="number"
+            min="200"
+            max="200000"
+            step="100"
+            class={inputClass + " font-firacode"}
+            value={String(aiConfig.maxInputTokens)}
+          />
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">输出上限</span>
+          <input
+            id="ai-maxout"
+            type="number"
+            min="16"
+            max="4096"
+            step="10"
+            class={inputClass + " font-firacode"}
+            value={String(aiConfig.maxOutputTokens)}
+          />
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-foreground/60">温度</span>
+          <input
+            id="ai-temp"
+            type="number"
+            min="0"
+            max="2"
+            step="0.1"
+            class={inputClass + " font-firacode"}
+            value={String(aiConfig.temperature)}
+          />
+        </label>
+      </div>
+
+      <label class="mt-3 block">
+        <span class="mb-1.5 block text-xs font-medium text-foreground/60">摘要风格（prompt）</span>
+        <textarea
+          id="ai-system"
+          rows="2"
+          class={inputClass + " resize-y text-xs leading-relaxed"}
+        >{aiConfig.systemPrompt}</textarea>
+      </label>
+
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <button
+          id="ai-save"
+          type="button"
+          class="cursor-pointer rounded-xl bg-accent px-4 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+        >
+          保存 AI 配置
+        </button>
+        <button
+          id="ai-test"
+          type="button"
+          class="cursor-pointer rounded-xl border border-border px-4 py-1.5 text-xs font-medium transition-colors hover:border-accent/40 hover:text-accent"
+        >
+          测试连接
+        </button>
+        <span id="ai-status" class="hidden rounded-lg px-3 py-1.5 text-xs"></span>
+      </div>
+
+      <div class="mt-4 border-t border-border/40 pt-3">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <span class="text-xs font-semibold text-foreground/60">Token 用量</span>
+          <span class="font-firacode text-[11px] text-foreground/40"
+            >累计 {aiUsage.calls} 次调用（线上 {aiUsage.onlineCalls} · 线下 {aiUsage.manualCalls}）</span
+          >
+        </div>
+        <dl
+          id="ai-usage"
+          class="grid gap-1.5 text-xs text-foreground/45 sm:grid-cols-2"
+          data-calls={String(aiUsage.calls)}
+        >
+          <div class="flex gap-2">
+            <dt class="shrink-0">累计 Prompt：</dt>
+            <dd class="font-firacode" data-usage="prompt">{aiUsage.promptTokens}</dd>
+          </div>
+          <div class="flex gap-2">
+            <dt class="shrink-0">累计 Completion：</dt>
+            <dd class="font-firacode" data-usage="completion">{aiUsage.completionTokens}</dd>
+          </div>
+        </dl>
+        {
+          (() => {
+            const lines: string[] = [];
+            if (aiUsage.estimated) {
+              lines.push("注：接口未返回 usage，以上 token 为中英混排启发式估算值");
+            }
+            const last = aiUsage.last;
+            if (last) {
+              lines.push(
+                `最近一次：${last.source === "manual" ? "线下手写" : "线上生成"} · ${last.model} · ` +
+                  `prompt ${last.promptTokens} / completion ${last.completionTokens} · ${last.latencyMs}ms`
+              );
+              if (last.ok === false && last.note) lines.push(`失败原因：${last.note}`);
+            }
+            return (
+              <p
+                id="ai-usage-note"
+                class="mt-2 whitespace-pre-line text-[11px] leading-relaxed text-foreground/40"
+              >
+                {lines.join("\n")}
+              </p>
+            );
+          })()
+        }
+      </div>
     </section>
 
     <section class="bg-card/60 mt-4 rounded-2xl border border-border/60 p-5">
@@ -327,4 +588,120 @@ const inputClass =
   });
 
   loadLinks();
+
+  /* ── AI 摘要配置：保存 + 可达性测试 ─────────────────────── */
+
+  const aiStatus = document.getElementById("ai-status");
+  const aiBox = document.getElementById("ai-usage");
+
+  function aiSay(text: string, ok: boolean) {
+    if (!aiStatus) return;
+    aiStatus.textContent = text;
+    aiStatus.classList.remove("hidden");
+    aiStatus.className = `rounded-lg px-3 py-1.5 text-xs ${ok ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-500"}`;
+  }
+
+  function collectAi() {
+    const val = (id: string) => document.getElementById(id) as HTMLInputElement;
+    return {
+      enabled: val("ai-enabled").checked,
+      preset: val("ai-preset").value,
+      model: val("ai-model").value.trim(),
+      authMode: val("ai-auth").value,
+      apiUrl: val("ai-url").value.trim(),
+      apiKey: val("ai-key").value.trim(),
+      requestTemplate: val("ai-template").value,
+      responsePath: val("ai-response").value.trim(),
+      usagePromptPath: val("ai-usage-p").value.trim(),
+      usageCompletionPath: val("ai-usage-c").value.trim(),
+      maxInputTokens: Number(val("ai-budget").value) || 6000,
+      maxOutputTokens: Number(val("ai-maxout").value) || 220,
+      temperature: Number(val("ai-temp").value),
+      systemPrompt: val("ai-system").value.trim(),
+    };
+  }
+
+  /** 用量面板：接口会回传最新统计，顺手把页面上的数字刷新掉。 */
+  function paintAiUsage(usage: any) {
+    if (!usage || !aiBox) return;
+    const promptEl = aiBox.querySelector('[data-usage="prompt"]');
+    const completionEl = aiBox.querySelector('[data-usage="completion"]');
+    if (promptEl) promptEl.textContent = String(usage.promptTokens ?? 0);
+    if (completionEl) completionEl.textContent = String(usage.completionTokens ?? 0);
+    document.getElementById("ai-usage")?.setAttribute("data-calls", String(usage.calls ?? 0));
+
+    const note = document.getElementById("ai-usage-note");
+    if (!note) return;
+    const lines: string[] = [];
+    lines.push(
+      `累计 ${usage.calls ?? 0} 次调用（线上 ${usage.onlineCalls ?? 0} · 线下 ${usage.manualCalls ?? 0}）`
+    );
+    if (usage.estimated) {
+      lines.push("注：接口未返回 usage，以上 token 为中英混排启发式估算值");
+    }
+    const last = usage.last;
+    if (last) {
+      lines.push(
+        `最近一次：${last.source === "manual" ? "线下手写" : "线上生成"} · ${last.model} · ` +
+          `prompt ${last.promptTokens} / completion ${last.completionTokens} · ${last.latencyMs}ms`
+      );
+      if (last.ok === false && last.note) lines.push(`失败原因：${last.note}`);
+    }
+    note.textContent = lines.join("\n");
+    note.classList.remove("hidden");
+    note.style.whiteSpace = "pre-line";
+  }
+
+  document.getElementById("ai-save")?.addEventListener("click", async () => {
+    aiSay("保存中…", true);
+    try {
+      const res = await fetch("/api/admin/ai/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(collectAi()),
+      });
+      const j = await res.json();
+      if (!j.ok) {
+        aiSay(j.error ?? "保存失败", false);
+        return;
+      }
+      // 空输入或掩码值都不会覆盖已保存的真 key，这里只复位输入框
+      const keyInput = document.getElementById("ai-key") as HTMLInputElement | null;
+      if (keyInput) keyInput.value = "";
+      aiSay("✓ 配置已保存", true);
+      paintAiUsage(j.usage);
+    } catch {
+      aiSay("网络错误，请重试", false);
+    }
+    window.setTimeout(() => aiStatus?.classList.add("hidden"), 4000);
+  });
+
+  document.getElementById("ai-test")?.addEventListener("click", async () => {
+    aiSay("正在测试连接…", true);
+    try {
+      const res = await fetch("/api/admin/ai/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(collectAi()),
+      });
+      const j = await res.json();
+      if (!j.ok) {
+        aiSay(`连接失败：${j.error ?? "未知错误"}`, false);
+        return;
+      }
+      aiSay(
+        `✓ 可达（${j.latencyMs}ms）· prompt ${j.promptTokens} / completion ${j.completionTokens} ${
+          j.estimated ? "（估算）" : "（接口真实值）"
+        } · 返回：${j.summary || "(空)"}`,
+        true
+      );
+      // 探测也会记一次调用，顺带回传最新用量把面板刷新掉
+      const cfgRes = await fetch("/api/admin/ai/config");
+      const cfgJson = await cfgRes.json();
+      if (cfgJson?.usage) paintAiUsage(cfgJson.usage);
+    } catch {
+      aiSay("网络错误，请重试", false);
+    }
+    window.setTimeout(() => aiStatus?.classList.add("hidden"), 6000);
+  });
 </script>

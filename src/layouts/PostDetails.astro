@@ -30,6 +30,8 @@ const {
   title,
   author,
   description,
+  // 后台「AI 摘要」写进 frontmatter 的 summary，优先于 description
+  summary,
   ogImage: initOgImage,
   canonicalURL,
   pubDatetime,
@@ -220,7 +222,7 @@ const relatedPosts = posts
     </header>
 
     <!-- ═══════ AI summary ═══════ -->
-    <AiSummary summary={description} />
+    <AiSummary summary={summary || description} />
 
     <!-- ═══════ Table of contents ═══════ -->
     <PostToc />
