@@ -131,6 +131,39 @@ export const DEFAULT_CONFIG: AiConfig = {
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
 };
 
+/** 常用中转站（new-api 系，OpenAI 兼容 + Bearer sk-）。设置页做成一键填入。 */
+export const QUICK_ENDPOINTS = [
+  {
+    id: "speed1",
+    label: "speed1（主）",
+    apiUrl: "https://speed1.toter.me/v1/chat/completions",
+    model: "gemini-3.1-pro",
+  },
+  {
+    id: "supxh",
+    label: "supxh（备用）",
+    apiUrl: "https://api.supxh.xin/v1/chat/completions",
+    model: "gemini-3.1-pro",
+  },
+] as const;
+
+/**
+ * 允许只填根地址（https://host/v1 或 https://host），自动补全到具体端点。
+ * new-api 系网关的报错是 `{"error":{"message":"Invalid token"}}`，
+ * 填错路径时往往也回 401，与其猜不如在保存时就把地址摆正。
+ */
+export function normalizeApiUrl(raw: string): string {
+  const url = String(raw ?? "").trim().replace(/\/+$/, "");
+  if (!url) return "";
+  // 已指向具体端点（/chat/completions 或 /completions）就原样用
+  if (/\/chat\/completions$/i.test(url) || /\/completions$/i.test(url)) return url;
+  // 形如 https://host、https://host/v1、https://host/api/v3 都算"根地址"
+  if (/^https?:\/\//i.test(url) && !/\.(php|asp|json)$/i.test(url)) {
+    return `${url}/chat/completions`;
+  }
+  return url;
+}
+
 const num = (value: unknown, fallback: number) => {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -145,7 +178,7 @@ export function normalizeConfig(input: Partial<AiConfig> | null | undefined): Ai
     enabled: Boolean(input?.enabled),
     preset,
     apiKey: String(input?.apiKey ?? ""),
-    apiUrl: String(input?.apiUrl ?? "").trim(),
+    apiUrl: normalizeApiUrl(input?.apiUrl ?? ""),
     model: String(input?.model ?? "").trim() || "gemini-3.1-pro",
     authMode: (input?.authMode ?? base?.authMode ?? "bearer") as AiAuthMode,
     // custom 或模板为空时回落到该预设的模板，避免用户清空后发出坏请求
@@ -263,7 +296,11 @@ export function authHeaders(cfg: AiConfig): Record<string, string> {
 
 /** apiUrl 里支持 `{{model}}` 占位（Gemini 原生把模型写在路径里）。 */
 function buildUrl(cfg: AiConfig): string {
-  const url = cfg.apiUrl.replace(/\{\{\s*model\s*\}\}/g, encodeURIComponent(cfg.model));
+  // 老配置可能存的是根地址，这里再兜一次（normalizeConfig 已经补过）
+  const url = normalizeApiUrl(cfg.apiUrl).replace(
+    /\{\{\s*model\s*\}\}/g,
+    encodeURIComponent(cfg.model)
+  );
   if (!cfg.apiKey) return url;
   if (cfg.authMode === "query-key") {
     const [base, search = ""] = url.split("?");

@@ -11,7 +11,25 @@ if (!(await isAuthed(Astro.cookies))) {
 import { passwordSource } from "@/utils/adminAuth";
 import { kvEnabled, kvProbe, kvStatus } from "@/utils/kvStore";
 import { deployHookConfigured } from "@/utils/redeploy";
-import { getAiConfig, getUsageStats, PRESETS } from "@/utils/aiSummary";
+import {
+  getAiConfig,
+  getUsageStats,
+  PRESETS,
+  QUICK_ENDPOINTS,
+} from "@/utils/aiSummary";
+
+/** 模型输入框的候选项（只是提示，中转站实际支持的以它返回的模型列表为准） */
+const MODEL_HINTS = [
+  "gemini-3.1-pro",
+  "gemini-3-flash",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash",
+  "claude-sonnet-4-5",
+  "claude-opus-4-5",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "deepseek-chat",
+];
 
 const source = await passwordSource();
 const sourceText: Record<typeof source, string> = {
@@ -224,10 +242,16 @@ const aiPresets = Object.entries(PRESETS).map(([id, p]) => ({
           <input
             id="ai-model"
             type="text"
+            list="ai-model-list"
             class={inputClass + " font-firacode"}
             value={aiConfig.model}
             placeholder="gemini-3.1-pro"
           />
+          <datalist id="ai-model-list">
+            {
+              MODEL_HINTS.map(m => <option value={m} />)
+            }
+          </datalist>
         </label>
         <label class="block">
           <span class="mb-1.5 block text-xs font-medium text-foreground/60">鉴权方式</span>
@@ -268,8 +292,26 @@ const aiPresets = Object.entries(PRESETS).map(([id, p]) => ({
           type="text"
           class={inputClass + " font-firacode"}
           value={aiConfig.apiUrl}
-          placeholder="https://your-gateway.example.com/v1/chat/completions"
+          placeholder="https://speed1.toter.me/v1/chat/completions"
         />
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <span class="text-xs text-foreground/45">一键填入：</span>
+          {
+            QUICK_ENDPOINTS.map(q => (
+              <button
+                type="button"
+                class="glass-btn rounded-xl border border-border px-3 py-1 text-xs text-foreground/70"
+                data-quick-url={q.apiUrl}
+                data-quick-model={q.model}
+              >
+                {q.label}
+              </button>
+            ))
+          }
+          <span class="text-xs text-foreground/45"
+            >（只填到 /v1 也没关系，保存时自动补全 /chat/completions）</span
+          >
+        </div>
       </label>
 
       <label class="mt-3 block">
@@ -600,6 +642,36 @@ const aiPresets = Object.entries(PRESETS).map(([id, p]) => ({
     aiStatus.classList.remove("hidden");
     aiStatus.className = `rounded-lg px-3 py-1.5 text-xs ${ok ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-500"}`;
   }
+
+  // 中转站一键填入：顺手把预设/鉴权/模板掰正，省得填了地址却在 OpenAI 模板下发 Gemini 格式
+  document.querySelectorAll<HTMLButtonElement>("[data-quick-url]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const url = btn.dataset.quickUrl ?? "";
+      const urlInput = document.getElementById("ai-url") as HTMLInputElement | null;
+      if (urlInput) {
+        urlInput.value = url;
+        urlInput.focus();
+      }
+      const modelInput = document.getElementById("ai-model") as HTMLInputElement | null;
+      if (modelInput && btn.dataset.quickModel) modelInput.value = btn.dataset.quickModel;
+      const preset = document.getElementById("ai-preset") as HTMLSelectElement | null;
+      if (preset) preset.value = "openai";
+      const auth = document.getElementById("ai-auth") as HTMLSelectElement | null;
+      if (auth) auth.value = "bearer";
+      const tpl = document.getElementById("ai-template") as HTMLTextAreaElement | null;
+      if (tpl && !tpl.value.trim()) {
+        tpl.value = `{
+  "model": "{{model}}",
+  "messages": [
+    { "role": "user", "content": "{{content}}" }
+  ],
+  "temperature": 0.6,
+  "max_tokens": 220
+}`;
+      }
+      aiSay(`已填入 ${url}，记得填 API Key 后点「测试连接」`, true);
+    });
+  });
 
   function collectAi() {
     const val = (id: string) => document.getElementById(id) as HTMLInputElement;
