@@ -19,6 +19,7 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import matter from "gray-matter";
 
 const REST_URL = (
   process.env.KV_REST_API_URL ||
@@ -91,15 +92,87 @@ await fs.mkdir(BLOG_DIR, { recursive: true });
 let written = 0;
 let removed = 0;
 
+/**
+ * Admin posts are stored with `kvSet`, which JSON-encodes the value, so a raw
+ * GET returns `"---\ntitle: …\n---"` with literal \n escapes. Decode it back to
+ * real markdown before writing it to disk — otherwise the file has no parseable
+ * frontmatter and the content collection rejects it.
+ */
+function decode(raw) {
+  const text = String(raw ?? "");
+  try {
+    const parsed = JSON.parse(text);
+    if (typeof parsed === "string") return parsed;
+  } catch {
+    /* not JSON — already plain markdown */
+  }
+  return text;
+}
+
+function toIsoDate(value) {
+  const date = value instanceof Date ? value : new Date(String(value ?? ""));
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+/** First ~100 chars of readable text, used when a post has no description. */
+function excerpt(content) {
+  return (
+    content
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/<\/?[a-zA-Z][^>]*>/g, "")
+      .replace(/[#>*_`~|-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 100) || ""
+  );
+}
+
+/**
+ * Normalise frontmatter so every synced post satisfies the collection schema
+ * (title / description / pubDatetime are required). One malformed post would
+ * otherwise fail the whole build.
+ */
+function normalize(raw, slug) {
+  const { data, content } = matter(raw);
+  const description = String(
+    data.description ?? data.desc ?? data.summary ?? ""
+  ).trim();
+  return matter.stringify(content, {
+    title: String(data.title ?? slug),
+    description: description || excerpt(content),
+    author: String(data.author ?? "南烛"),
+    pubDatetime: toIsoDate(data.pubDatetime ?? data.date ?? data.published),
+    ...(data.modDatetime || data.updated || data.lastmod
+      ? {
+          modDatetime: toIsoDate(
+            data.modDatetime ?? data.updated ?? data.lastmod
+          ),
+        }
+      : {}),
+    tags:
+      Array.isArray(data.tags) && data.tags.length
+        ? data.tags.map(String)
+        : ["others"],
+    featured: Boolean(data.featured ?? data.sticky ?? false),
+    draft: Boolean(data.draft ?? false),
+  });
+}
+
 // 1) Redis → files
 if (mode !== "none") {
   const keys = await cmdKeys("blog:post:*");
   for (const key of keys) {
     const slug = key.replace("blog:post:", "");
     if (!/^[a-z0-9-]+$/.test(slug)) continue;
-    const raw = await cmdGet(key);
-    if (!raw) continue;
-    await fs.writeFile(path.join(BLOG_DIR, `${slug}.md`), String(raw), "utf-8");
+    const raw = decode(await cmdGet(key));
+    if (!raw.trim()) continue;
+    await fs.writeFile(
+      path.join(BLOG_DIR, `${slug}.md`),
+      normalize(raw, slug),
+      "utf-8"
+    );
     written += 1;
     console.log(`[sync-kv] wrote ${slug}.md`);
   }
