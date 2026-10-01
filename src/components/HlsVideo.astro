@@ -1,0 +1,82 @@
+---
+/**
+ * 给带 data-hls-src 的 <video> 挂上 hls.js。
+ *
+ * m3u8（HLS）流只有 Safari / iOS 能原生播放，Chrome、Edge、Firefox 都放不出来，
+ * 必须靠 hls.js 转封装成 MSE。这里按需动态 import：文章里没有 HLS 视频时，
+ * 这段 300KB 左右的解码器根本不会被下载。
+ */
+---
+
+<script>
+  let hlsPromise = null;
+  const instances = new Set();
+
+  function loadHls() {
+    if (!hlsPromise) {
+      hlsPromise = import("hls.js").catch(() => null);
+    }
+    return hlsPromise;
+  }
+
+  function fail(video, msg) {
+    const box = video.closest(".vg-frame") || video.parentElement;
+    if (!box || box.querySelector(".vg-error")) return;
+    const tip = document.createElement("div");
+    tip.className = "vg-error";
+    tip.textContent = msg;
+    box.appendChild(tip);
+  }
+
+  async function mount(video) {
+    // 用 data 标记而不是 WeakSet：同一个 video 只挂一次，
+    // 即使这段脚本被重复注入（多个组件都引用了它）也不会重复 attach
+    if (video.dataset.hlsMounted === "1") return;
+    video.dataset.hlsMounted = "1";
+
+    const src = video.getAttribute("data-hls-src");
+    if (!src) return;
+
+    // Safari / iOS 原生支持 HLS，直接给 src 更省电
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = src;
+      return;
+    }
+
+    const mod = await loadHls();
+    const Hls = mod && (mod.default || mod);
+    if (!Hls || (typeof Hls.isSupported === "function" && !Hls.isSupported())) {
+      fail(video, "当前浏览器无法播放该视频（HLS / m3u8）");
+      return;
+    }
+
+    const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+    instances.add(hls);
+    hls.on(Hls.Events.ERROR, (_evt, data) => {
+      if (data && data.fatal) fail(video, "视频加载失败，请检查链接是否有效");
+    });
+    hls.loadSource(src);
+    hls.attachMedia(video);
+  }
+
+  function init() {
+    document
+      .querySelectorAll("video[data-hls-src]")
+      .forEach(video => void mount(video));
+  }
+
+  function destroy() {
+    instances.forEach(hls => {
+      try {
+        hls.destroy();
+      } catch {
+        /* noop */
+      }
+    });
+    instances.clear();
+  }
+
+  init();
+  document.addEventListener("astro:page-load", init);
+  document.addEventListener("astro:before-swap", destroy);
+</script>

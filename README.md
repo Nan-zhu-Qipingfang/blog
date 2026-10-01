@@ -277,6 +277,59 @@ Markdown 支持 hexo-theme-anzhiyu 风格的外挂标签，由
 
 ---
 
+## 🎬 `:::` 容器标签
+
+除 `{% %}` 外，还兼容更通用的 `:::` 容器写法（属性用 `key=value`）。单行、多行都支持：
+
+### 视频画廊 `video-gallery`
+
+```md
+:::video-gallery cols=1 ratio=16:9 url=https://example.com/a.m3u8 title=视频速览 desc=一行说明 :::
+```
+
+| 属性 | 说明 | 默认 |
+| --- | --- | --- |
+| `url` | 视频地址，多个用 `;` 分隔 | — |
+| `cols` | 列数 1–4（不会超过视频数量） | `1` |
+| `ratio` | 宽高比，如 `16:9`、`4:3`、`1:1` | `16:9` |
+| `title` / `desc` | 整体标题 / 说明 | — |
+| `titles` / `descs` | 每个视频各自的标题 / 说明，用 `;` 分隔 | — |
+| `poster` / `cover` | 封面图 | — |
+
+多行写法（每行一个地址）：
+
+```md
+:::video-gallery cols=2 ratio=16:9 title=合集
+https://example.com/a.m3u8
+https://example.com/b.mp4
+:::
+```
+
+> [!NOTE]
+> **m3u8（HLS）流**：Safari / iOS 能原生播放，Chrome、Edge、Firefox 需要 hls.js。
+> 插件会识别 `.m3u8` 链接并输出 `data-hls-src`，页面按需动态加载 hls.js
+> （`src/components/HlsVideo.astro`）转封装播放；没用到 HLS 的页面不会下载这部分代码。
+> 播放失败时会在视频框内给出中文提示。
+
+### 音频 / 提示条 / 折叠
+
+```md
+:::audio https://example.com/demo.mp3 :::
+
+:::warning 这是一条警告 :::
+
+:::tip success 这是一条成功提示 :::
+
+:::details 点我展开
+折叠里的内容。
+:::
+```
+
+别名：`video` / `videos` / `videogallery` → 视频画廊；`note` / `info` / `success` / `warning` / `danger` / `error` → 提示条；`fold` / `hideToggle` → 折叠。
+不认识的容器名会原样保留，不会吞掉正文。
+
+---
+
 ## ⚙️ Configuration
 
 All site configuration lives in `src/config.ts` (the `SITE` constant). It includes general settings (title, description, timezone), feature toggles (galleries, audio player, mixed feed), and content limits (posts per page, gallery embed limit).

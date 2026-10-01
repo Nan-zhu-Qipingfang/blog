@@ -5,6 +5,8 @@ import { PUBLIC_GOOGLE_SITE_VERIFICATION } from "astro:env/client";
 import { SITE } from "@/config";
 import SearchModal from "@/components/SearchModal.astro";
 import MusicPill from "@/components/MusicPill.astro";
+// m3u8 / HLS 视频按需加载 hls.js（页面里没有 HLS 视频就不会下载）
+import HlsVideo from "@/components/HlsVideo.astro";
 import "@/styles/global.css";
 
 type Props = {
@@ -280,6 +282,9 @@ const showGrain = SITE.backdropEffects.grain;
 
     <!-- Floating music player pill (bottom-left) -->
     <MusicPill />
+
+    <!-- HLS(m3u8) 播放支持：只给带 data-hls-src 的 video 挂 hls.js -->
+    <HlsVideo />
 
     <!-- Load full theme logic -->
     <script src="../scripts/theme.ts"></script>
