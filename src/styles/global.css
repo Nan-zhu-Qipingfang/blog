@@ -285,6 +285,30 @@ div.videos[col="4"] > iframe {
   display: inline;
 }
 
+/* 隐藏文本：{psw}内容{/psw} —— 默认打模糊，点击后显示（纯 CSS，无需 JS） */
+.anzhiyu-psw > .psw-cb {
+  display: none;
+}
+.anzhiyu-psw > .psw-body {
+  cursor: pointer;
+  filter: blur(4.5px);
+  opacity: 0.9;
+  user-select: none;
+  transition:
+    filter 0.35s ease,
+    opacity 0.35s ease;
+}
+.anzhiyu-psw > .psw-body:hover {
+  filter: blur(3px);
+  opacity: 1;
+}
+.anzhiyu-psw > .psw-cb:checked + .psw-body {
+  cursor: auto;
+  filter: none;
+  opacity: 1;
+  user-select: auto;
+}
+
 .hide-block {
   margin: 0 0 16px;
 }

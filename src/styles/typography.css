@@ -10,15 +10,91 @@
     h3,
     h4,
     th {
-      @apply mb-3 text-foreground;
+      @apply text-foreground;
+    }
+
+    /* h1 在正文里就是文章标题，沿用 prose 默认字号，只补字体与锚点偏移 */
+    h1 {
+      @apply font-app font-extrabold;
+      scroll-margin-top: 5rem;
+    }
+
+    /* ── 小节标题：flex 基线对齐 + 前置强调标记（对标参考站视觉） ──
+       参考站用 FontAwesome 图标，本项目未引入 FA，改用纯 CSS 菱形标记。 */
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      @apply font-app font-extrabold;
+      display: flex;
+      align-items: baseline;
+      gap: 0.45em;
+      font-style: normal;
+      margin-bottom: calc(var(--spacing) * 3);
+      scroll-margin-top: 5rem;
     }
 
     h2 {
-      @apply text-[1.62rem] font-extrabold;
+      @apply mt-14;
+      font-size: 1.62em;
+      line-height: 1.36;
     }
 
     h3 {
-      @apply text-[1.42rem];
+      @apply mt-11;
+      font-size: 1.42em;
+      line-height: 1.45;
+    }
+
+    h4 {
+      @apply mt-9;
+      font-size: 1.2em;
+      line-height: 1.5;
+    }
+
+    h5 {
+      @apply mt-8;
+      font-size: 1.08em;
+      line-height: 1.45;
+    }
+
+    h6 {
+      @apply mt-7;
+      font-size: 1.02em;
+      line-height: 1.45;
+    }
+
+    h2::before,
+    h3::before,
+    h4::before,
+    h5::before,
+    h6::before {
+      content: "";
+      flex: none;
+      width: 0.42em;
+      height: 0.42em;
+      border-radius: 2px;
+      opacity: 0.85;
+      background: linear-gradient(
+        135deg,
+        var(--accent),
+        color-mix(in srgb, var(--accent) 30%, transparent)
+      );
+      transform: translateY(-0.06em) rotate(45deg);
+      transition:
+        transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.3s ease;
+    }
+
+    /* hover 时标记转动放大，给静态标题一点反馈 */
+    h2:hover::before,
+    h3:hover::before,
+    h4:hover::before,
+    h5:hover::before,
+    h6:hover::before {
+      opacity: 1;
+      transform: translateY(-0.06em) rotate(225deg) scale(1.18);
     }
 
     p,
@@ -31,39 +107,86 @@
       @apply text-foreground;
     }
 
+    p {
+      line-height: 1.8;
+      margin: 1.25em 0;
+    }
+
+    /* 链接：默认细点状下划线，hover 变粗并转为强调色（对标参考站） */
     a {
-      @apply relative font-medium text-foreground no-underline transition-all duration-200 wrap-break-word;
-      background-image: linear-gradient(to right, color-mix(in srgb, var(--accent) 40%, transparent), color-mix(in srgb, var(--accent) 40%, transparent));
+      @apply relative font-medium wrap-break-word;
+      color: var(--foreground);
+      text-decoration-line: none;
+      margin-inline: 0.08em;
+      background-image: radial-gradient(currentColor 45%, #0000 47%);
       background-position: 0 100%;
-      background-size: 100% 1px;
-      background-repeat: no-repeat;
+      background-repeat: repeat-x;
+      background-size: 0.38em 1px;
+      transition:
+        color 0.2s ease,
+        background-size 0.2s ease;
     }
 
     a:hover,
     a:focus-visible {
       @apply text-accent outline-none;
-      background-size: 100% 2px;
-      background-image: linear-gradient(to right, var(--accent), var(--accent));
+      background-size: 0.38em 2px;
     }
 
     ul {
       @apply overflow-x-clip;
+      margin: 1.25em 0;
+    }
+
+    ol {
+      margin: 1.25em 0;
     }
 
     li {
       @apply marker:text-accent;
+      line-height: 1.78;
+      margin: 0.5em 0;
+    }
+
+    li > p {
+      margin: 0.25em 0;
     }
 
     hr {
-      @apply border-border;
+      @apply my-12 border-border;
+      border-style: dashed;
+      opacity: 0.55;
     }
 
     img {
-      @apply mx-auto rounded-md;
+      @apply mx-auto block rounded-md;
+      border: 1px solid var(--border);
+      transition:
+        transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+        border-color 0.28s ease,
+        box-shadow 0.28s ease;
     }
 
+    img:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px) scale(1.01);
+    }
+
+    /* 图注做成胶囊标签（对标参考站 .article-image-caption） */
     figcaption {
-      @apply text-center text-[13px] text-foreground/54;
+      display: flex;
+      justify-content: center;
+      width: fit-content;
+      max-width: min(100%, 42rem);
+      margin: 0.62rem auto 0;
+      padding: 0.18rem 0.72rem;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--muted) 14%, transparent);
+      color: color-mix(in srgb, var(--foreground) 58%, transparent);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      line-height: 1.45;
+      text-align: center;
     }
 
     table {
@@ -101,8 +224,43 @@
       @apply rounded-none border-0 p-0 shadow-none;
     }
 
+    /* 引用块：虚线描边 + 左上角径向高光（对标参考站） */
     blockquote {
-      @apply rounded-2xl border-s-2 border-foreground/30 bg-accent/30 py-4 pr-5 pl-4 text-[1.02rem] text-foreground/90 shadow-sm shadow-accent/5 wrap-break-word;
+      @apply relative wrap-break-word;
+      margin: 1.6em 0;
+      padding: 1rem 1.25rem;
+      border: 2px dashed color-mix(in srgb, var(--foreground) 30%, transparent);
+      border-radius: 1rem;
+      background:
+        radial-gradient(
+          circle at 1.2rem 1rem,
+          color-mix(in srgb, var(--accent) 10%, transparent),
+          transparent 34%
+        ),
+        color-mix(in srgb, var(--background) 92%, var(--foreground));
+      color: color-mix(in srgb, var(--foreground) 90%, transparent);
+      font-size: 1.02rem;
+      font-style: normal;
+      line-height: 1.75;
+      box-shadow:
+        0 12px 30px -26px color-mix(in srgb, var(--accent) 42%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent);
+      transition:
+        border-color 0.3s ease,
+        box-shadow 0.3s ease,
+        transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    blockquote:hover {
+      border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+      transform: translateY(-1px);
+    }
+
+    blockquote p:first-of-type {
+      margin-top: 0;
+    }
+    blockquote p:last-of-type {
+      margin-bottom: 0;
     }
 
     /* ===== Table of Contents (clean card, no glassmorphism) ===== */
@@ -358,4 +516,41 @@
       @apply rounded-sm border border-border px-0.5 py-px;
     }
   }
+
+  /* ===== 文章内容滚动入场动画（ScrollReveal.astro 驱动） =====
+     属性由 JS 添加：JS 未执行时元素不带 data-reveal，内容始终可见。 */
+  .app-prose > [data-reveal] {
+    opacity: 0;
+    transform: translateY(18px);
+    transition:
+      opacity 0.55s cubic-bezier(0.22, 0.61, 0.36, 1),
+      transform 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  .app-prose > [data-reveal="visible"] {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* 标题、引用、代码块、图片稍慢一点，滚动时更有层次 */
+  .app-prose > h1[data-reveal],
+  .app-prose > h2[data-reveal],
+  .app-prose > h3[data-reveal],
+  .app-prose > h4[data-reveal],
+  .app-prose > blockquote[data-reveal],
+  .app-prose > .code-block-wrap[data-reveal],
+  .app-prose > figure[data-reveal],
+  .app-prose > .video-gallery[data-reveal] {
+    transition-duration: 0.7s;
+  }
+
+  /* 用户开启「减少动效」时直接显示，不做位移淡入 */
+  @media (prefers-reduced-motion: reduce) {
+    .app-prose > [data-reveal] {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
 }
+

@@ -12,6 +12,8 @@ import GalleryEmbed from "@/components/GalleryEmbed.astro";
 import Comments from "@/components/Comments.astro";
 import AiSummary from "@/components/AiSummary.astro";
 import PostToc from "@/components/PostToc.astro";
+// 文章滚动入场动画
+import ScrollReveal from "@/components/ScrollReveal.astro";
 import { getPath } from "@/utils/getPath";
 import { slugifyStr } from "@/utils/slugify";
 import { getReadingTime } from "@/utils/readingTime";
@@ -229,6 +231,9 @@ const relatedPosts = posts
     >
       <Content components={{ GalleryEmbed }} />
     </article>
+
+    <!-- 正文滚动渐显 -->
+    <ScrollReveal />
 
     <!-- ═══════ Comments ═══════ -->
     <Comments />

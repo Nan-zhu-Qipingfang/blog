@@ -1,0 +1,80 @@
+---
+/**
+ * 文章正文滚动渐显。
+ *
+ * 设计要点：
+ * - 标记由 JS 添加，JS 未执行时元素不带 data-reveal，内容永远可见（不会白屏）。
+ * - 同一批进入视口的元素按顺序错峰，避免整块一起弹出来。
+ * - 尊重系统的「减少动效」设置。
+ * - 兼容 ClientRouter 的 astro:page-load 重新绑定。
+ */
+---
+
+<script>
+  const ANIMATE_ATTR = "data-reveal";
+  const SKIP_TAGS = ["style", "script", "br"];
+  const STAGGER_STEP = 55; // ms
+  const MAX_STAGGER = 330; // ms
+
+  function prefersReducedMotion() {
+    return (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  }
+
+  function initReveal() {
+    const prose = document.querySelector(".app-prose");
+    if (!prose) return;
+
+    const targets = Array.from(prose.children).filter(el => {
+      const tag = el.tagName.toLowerCase();
+      if (SKIP_TAGS.includes(tag)) return false;
+      // 目录（details）本身有自己的展开交互，不做入场动画
+      if (tag === "details") return false;
+      return true;
+    });
+    if (targets.length === 0) return;
+
+    // 减少动效：直接可见，不挂观察器
+    if (prefersReducedMotion()) {
+      targets.forEach(el => el.setAttribute(ANIMATE_ATTR, "visible"));
+      return;
+    }
+
+    targets.forEach(el => {
+      if (!el.hasAttribute(ANIMATE_ATTR)) el.setAttribute(ANIMATE_ATTR, "");
+    });
+
+    const show = (el, order) => {
+      const delay = Math.min(order * STAGGER_STEP, MAX_STAGGER);
+      if (delay > 0) el.style.transitionDelay = `${delay}ms`;
+      // 下一帧再切换，确保初始态（opacity:0）已经被浏览器采纳
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          el.setAttribute(ANIMATE_ATTR, "visible");
+          // 动画结束后清掉 delay，避免影响后续 hover 过渡
+          window.setTimeout(() => {
+            el.style.transitionDelay = "";
+          }, 1200);
+        });
+      });
+    };
+
+    const observer = new IntersectionObserver(
+      entries => {
+        const hit = entries.filter(e => e.isIntersecting);
+        hit.forEach((entry, i) => {
+          show(entry.target, i);
+          observer.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.08, rootMargin: "0px 0px -40px 0px" }
+    );
+
+    targets.forEach(el => observer.observe(el));
+  }
+
+  initReveal();
+  document.addEventListener("astro:page-load", initReveal);
+</script>

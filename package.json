@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "astro dev",
-    "build": "node scripts/sync-kv-content.mjs && astro build && pagefind --site dist/client && node scripts/postbuild-pagefind.mjs",
+    "build": "node scripts/clear-astro-cache.mjs && node scripts/sync-kv-content.mjs && astro build && pagefind --site dist/client && node scripts/postbuild-pagefind.mjs",
     "check": "astro check",
     "preview": "astro preview",
     "sync": "astro sync",

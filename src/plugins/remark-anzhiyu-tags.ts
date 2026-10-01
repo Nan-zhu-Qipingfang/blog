@@ -81,6 +81,30 @@ function dedupe(list: string[]): string[] {
 
 const INLINE_RE = /\{%\s*(audio|video|hideInline)\s+([^%]*?)\s*%\}/g;
 
+/** 短写法：{psw}隐藏内容{/psw}（安知鱼 psw 标签的简写形式） */
+const PSW_RE = /\{psw\}([\s\S]*?)\{\/psw\}/g;
+
+/** 段落级兜底用：一次扫描同时认 {% %} 与 {psw} 两种写法 */
+const INLINE_ANY_RE =
+  /\{%\s*(audio|video|hideInline)\s+([^%]*?)\s*%\}|\{psw\}([\s\S]*?)\{\/psw\}/g;
+
+/**
+ * 隐藏文本（psw）：纯 CSS 的点击显示，不需要 JS。
+ * 内容默认打模糊，点击后清除模糊；复选框状态即显示状态。
+ */
+function pswNodes(
+  processor: { parse: (v: string) => MdNode },
+  inner: string
+): MdNode[] {
+  const id = `psw-${++hideSeq}`;
+  const open =
+    `<span class="anzhiyu-psw">` +
+    `<input class="psw-cb" id="${id}" type="checkbox" />` +
+    `<label class="psw-body" for="${id}" title="点击显示隐藏内容">`;
+  const close = `</label></span>`;
+  return [html(open), ...inlineNodes(processor, inner), html(close)];
+}
+
 let hideSeq = 0;
 
 function renderInline(name: string, argsRaw: string): string {
@@ -112,15 +136,24 @@ function renderInline(name: string, argsRaw: string): string {
   return "";
 }
 
-function splitInline(value: string): MdNode[] | null {
+function splitInline(
+  value: string,
+  processor?: { parse: (v: string) => MdNode }
+): MdNode[] | null {
   const out: MdNode[] = [];
   let last = 0;
   let match: RegExpExecArray | null;
-  INLINE_RE.lastIndex = 0;
-  while ((match = INLINE_RE.exec(value)) !== null) {
+  INLINE_ANY_RE.lastIndex = 0;
+  while ((match = INLINE_ANY_RE.exec(value)) !== null) {
     if (match.index > last) out.push(text(value.slice(last, match.index)));
-    const rendered = renderInline(match[1], match[2] ?? "");
-    if (rendered) out.push(html(rendered));
+    if (match[1]) {
+      const rendered = renderInline(match[1], match[2] ?? "");
+      if (rendered) out.push(html(rendered));
+    } else if (processor) {
+      out.push(...pswNodes(processor, match[3] ?? ""));
+    } else {
+      out.push(text(match[3] ?? ""));
+    }
     last = match.index + match[0].length;
   }
   if (out.length === 0) return null;
@@ -692,6 +725,8 @@ function nodeMarkdown(node: MdNode): string {
       return "**" + inner() + "**";
     case "emphasis":
       return "*" + inner() + "*";
+    case "delete":
+      return "~~" + inner() + "~~";
     case "break":
       return "\n";
     case "link": {
@@ -717,12 +752,18 @@ function rebuildFromMarkdown(
   const out: MdNode[] = [];
   let last = 0;
   let match: RegExpExecArray | null;
-  INLINE_RE.lastIndex = 0;
-  while ((match = INLINE_RE.exec(md)) !== null) {
+  INLINE_ANY_RE.lastIndex = 0;
+  while ((match = INLINE_ANY_RE.exec(md)) !== null) {
     const before = md.slice(last, match.index);
     if (before.trim()) out.push(...inlineNodes(processor, before));
-    const rendered = renderInline(match[1], match[2] ?? "");
-    if (rendered) out.push(html(rendered));
+    if (match[1]) {
+      // {% audio|video|hideInline ... %}
+      const rendered = renderInline(match[1], match[2] ?? "");
+      if (rendered) out.push(html(rendered));
+    } else {
+      // {psw}隐藏内容{/psw}
+      out.push(...pswNodes(processor, match[3] ?? ""));
+    }
     last = match.index + match[0].length;
   }
   if (out.length === 0) return;
@@ -786,9 +827,9 @@ function transformInline(
     if (
       child.type === "text" &&
       typeof child.value === "string" &&
-      child.value.includes("{%")
+      (child.value.includes("{%") || child.value.includes("{psw}"))
     ) {
-      const replaced = splitInline(child.value);
+      const replaced = splitInline(child.value, processor);
       if (replaced) {
         kids.splice(i, 1, ...replaced);
         i += replaced.length;
@@ -800,8 +841,9 @@ function transformInline(
 
   // 兜底：标签被 GFM/内联标记拆散时（如 "前面 {% audio https://x %} 后面"），
   // 整段源码匹配一次，剩下的片段重新解析，保证链接等行内语法不丢。
-  if (INLINE_RE.test(nodeMarkdown(parent)))
-    rebuildFromMarkdown(parent, processor);
+  const fallback = nodeMarkdown(parent);
+  INLINE_ANY_RE.lastIndex = 0;
+  if (INLINE_ANY_RE.test(fallback)) rebuildFromMarkdown(parent, processor);
 }
 
 export default function remarkAnzhiyuTags(this: unknown) {
