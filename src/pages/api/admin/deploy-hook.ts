@@ -36,7 +36,15 @@ export async function POST({ cookies, request }: { cookies: any; request: Reques
       { status: 400 }
     );
   }
-  await saveDeployHook(url);
+  try {
+    await saveDeployHook(url);
+  } catch (error) {
+    // 最常见的就是 KV 没启用（Vercel 只读 FS）：给可执行的中文提示，别抛 500
+    return Response.json(
+      { ok: false, error: (error as Error).message || "保存失败" },
+      { status: 503 }
+    );
+  }
   const status = await deployHookStatus();
   return Response.json({
     ok: true,
