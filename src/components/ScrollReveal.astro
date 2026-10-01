@@ -73,6 +73,32 @@
     );
 
     targets.forEach(el => observer.observe(el));
+
+    // 安全网：锚点跳转 / 恢复滚动位置会「掠过」一些元素 —— 它们从视口下方
+    // 直接跑到视口上方，交叉比例始终为 0，观察器不会触发，内容就会永远停在
+    // opacity:0。这里用一次性的滚动兜底把已经划过头顶的元素补显示出来。
+    let sweepQueued = false;
+    const sweep = () => {
+      sweepQueued = false;
+      let left = 0;
+      targets.forEach(el => {
+        if (el.getAttribute(ANIMATE_ATTR) === "visible") return;
+        const rect = el.getBoundingClientRect();
+        if (rect.bottom < 0) {
+          observer.unobserve(el);
+          el.setAttribute(ANIMATE_ATTR, "visible");
+          return;
+        }
+        left++;
+      });
+      if (left === 0) window.removeEventListener("scroll", onScroll);
+    };
+    const onScroll = () => {
+      if (sweepQueued) return;
+      sweepQueued = true;
+      requestAnimationFrame(sweep);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
   }
 
   initReveal();
