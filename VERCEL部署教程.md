@@ -114,7 +114,7 @@ cpSync(_staticDir, "./.vercel/output/static/", { recursive: true });
    - 进入 **Settings → Git → Deploy Hooks**，随便起个名字（如 `admin-save`）和分支 `main`，创建后会得到一个形如 `https://api.vercel.com/v1/integrations/deploy/...` 的 URL；
    - 把这个 URL 添加为环境变量 `DEPLOY_HOOK_URL`。
    - 之后在后台保存/删除文章时会自动触发一次重新部署（构建前的同步脚本会把 KV 里的文章落盘），**约 1 分钟后文章自动上线**，全程不用碰 Git。
-4. 添加完成后 **Redeploy** 一次让配置生效。
+4. **最重要：添加完成后必须 Redeploy 一次。** 已部署的 Serverless 函数实例不会自动读取新环境变量；不重部署时，/admin/settings 里会一直显示红点"未检测到 KV 存储"，导入 MD / 保存文章 / 改密码也会继续报 EROFS 或"线上未启用 KV 存储"。
 
 > 说明：
 > - 不配置 KV 时本地开发一切正常（自动回退到本地 JSON 文件），只是线上后台的数据无法持久化，**且改密码、写文章、导入 MD 都会失败**。

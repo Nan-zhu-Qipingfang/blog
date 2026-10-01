@@ -9,7 +9,7 @@ if (!(await isAuthed(Astro.cookies))) {
   return Astro.redirect("/admin/login");
 }
 import { passwordSource } from "@/utils/adminAuth";
-import { kvEnabled } from "@/utils/kvStore";
+import { kvEnabled, kvStatus } from "@/utils/kvStore";
 
 const source = await passwordSource();
 const sourceText: Record<typeof source, string> = {
@@ -21,9 +21,16 @@ const sourceText: Record<typeof source, string> = {
 // Vercel's filesystem is read-only — without KV every write (import, save,
 // logs) fails. Surface it here so the cause is obvious.
 const storageOk = kvEnabled;
+const missingVars = [
+  !kvStatus.url && "KV_REST_API_URL（或 UPSTASH_REDIS_REST_URL）",
+  !kvStatus.token && "KV_REST_API_TOKEN（或 UPSTASH_REDIS_REST_TOKEN）",
+].filter(Boolean);
+
 const storageText = storageOk
   ? "KV 存储已启用：文章、日志正常持久化，保存后会自动触发重新部署。"
-  : "未检测到 KV 存储（KV_REST_API_URL / KV_REST_API_TOKEN）。线上文件系统只读，导入与保存文章会失败。请在 Vercel 项目设置里绑定 Redis(Upstash) 数据库并重新部署。";
+  : missingVars.length
+    ? `未检测到环境变量：${missingVars.join("、")}。绑定 Redis 后必须点击一次 Redeploy，已部署的函数实例不会自动刷新环境变量。`
+    : "未检测到 KV 存储。线上文件系统只读，导入与保存文章会失败。请在 Vercel 项目设置里绑定 Redis(Upstash) 数据库并重新部署。";
 
 const inputClass =
   "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60";

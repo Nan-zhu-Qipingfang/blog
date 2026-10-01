@@ -24,6 +24,13 @@ const REST_TOKEN =
 
 export const kvEnabled = Boolean(REST_URL && REST_TOKEN);
 
+/** Admin-facing status check: which env vars are present (without leaking values). */
+export const kvStatus = {
+  url: Boolean(REST_URL),
+  token: Boolean(REST_TOKEN),
+  enabled: kvEnabled,
+};
+
 const LOCAL_DIR = path.resolve(".data/kv");
 
 /** Common guard: Vercel's filesystem is read-only, so any write that falls back
