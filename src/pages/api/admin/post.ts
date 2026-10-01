@@ -3,6 +3,7 @@ export const prerender = false;
 import type { APIRoute } from "astro";
 import { isAuthed } from "@/utils/adminAuth";
 import { appendLog, getPost, savePost, trashPost } from "@/utils/adminStore";
+import { triggerRedeploy } from "@/utils/redeploy";
 
 const unauthorized = () =>
   new Response(JSON.stringify({ ok: false, message: "未登录" }), {
@@ -15,13 +16,6 @@ const json = (data: unknown, status = 200) =>
     status,
     headers: { "Content-Type": "application/json" },
   });
-
-/** Fire-and-forget Vercel deploy hook so saved posts go live without a manual redeploy. */
-function triggerRebuild(): void {
-  const hook = import.meta.env.DEPLOY_HOOK_URL as string | undefined;
-  if (!hook) return;
-  fetch(hook, { method: "POST" }).catch(() => {});
-}
 
 /** GET /api/admin/post?slug=xxx — raw post for the editor */
 export const GET: APIRoute = async Astro => {
@@ -63,8 +57,8 @@ export const POST: APIRoute = async Astro => {
       content,
     });
     await appendLog(isNew ? "新建文章" : "更新文章", `${title}（${slug}）`);
-    triggerRebuild();
-    return json({ ok: true, slug });
+    const deploy = await triggerRedeploy();
+    return json({ ok: true, slug, deploy });
   } catch (error) {
     return json({ ok: false, message: String((error as Error).message ?? error) }, 400);
   }
@@ -77,6 +71,6 @@ export const DELETE: APIRoute = async Astro => {
   const removed = await trashPost(slug);
   if (!removed) return json({ ok: false, message: "文章不存在" }, 404);
   await appendLog("删除文章", `${slug}（已移入回收站）`);
-  triggerRebuild();
-  return json({ ok: true });
+  const deploy = await triggerRedeploy();
+  return json({ ok: true, deploy });
 };

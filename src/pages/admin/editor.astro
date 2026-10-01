@@ -194,18 +194,27 @@ const inputClass =
           content,
         }),
       });
-      let result: { ok?: boolean; message?: string };
+      let result: {
+        ok?: boolean;
+        message?: string;
+        deploy?: { triggered?: boolean; message?: string };
+      };
       try {
         result = await response.json();
       } catch {
         result = { ok: false, message: `服务器错误（HTTP ${response.status}）` };
       }
       if (result.ok) {
-        status.textContent = "✓ 已保存，正在触发重新部署…";
-        status.style.color = "var(--accent)";
+        const note = result.deploy?.message ?? "";
+        status.textContent = result.deploy?.triggered
+          ? `✓ 已保存。${note}`
+          : `✓ 已保存，但${note || "前台暂不会更新"}`;
+        status.style.color = result.deploy?.triggered
+          ? "var(--accent)"
+          : "var(--color-red-500, #ef4444)";
         setTimeout(() => {
           location.href = "/admin/posts";
-        }, 900);
+        }, result.deploy?.triggered ? 900 : 2600);
       } else {
         status.textContent = result.message ?? "保存失败";
         status.style.color = "var(--color-red-500, #ef4444)";

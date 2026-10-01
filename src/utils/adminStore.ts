@@ -14,6 +14,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
 import { BLOG_PATH } from "@/content.config";
+// Generated at build time by scripts/sync-kv-content.mjs (see that file for why).
+import { postsSnapshot } from "@/generated/postsSnapshot";
 import { kvDel, kvEnabled, kvGet, kvKeys, kvSet } from "@/utils/kvStore";
 
 export const BLOG_DIR = path.resolve(BLOG_PATH);
@@ -104,25 +106,59 @@ function parsePostFile(fileName: string, raw: string): PostMeta | null {
   };
 }
 
-export async function listPosts(): Promise<PostMeta[]> {
-  const posts: PostMeta[] = [];
+/**
+ * Every post the admin should be able to see, as slug → raw markdown.
+ *
+ * Two sources merged:
+ *   - `postsSnapshot`: baked in at build time from src/data/blog/*.md. On
+ *     Vercel the function bundle cannot enumerate those files at runtime.
+ *   - Redis (`blog:post:*`): whatever was saved/edited since the last deploy.
+ *     Redis wins for the same slug so edits show up immediately.
+ *   - `blog:trash:*` tombstones hide a slug until the next deploy removes it.
+ */
+async function allRawPosts(): Promise<Map<string, string>> {
+  const merged = new Map<string, string>();
+  for (const item of postsSnapshot) merged.set(item.slug, item.raw);
+
+  // Dev-time convenience: files dropped into src/data/blog after the last
+  // build. On Vercel this directory simply isn't there and the catch fires.
+  try {
+    const entries = await fs.readdir(BLOG_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || entry.name.startsWith("_")) continue;
+      if (!/\.mdx?$/i.test(entry.name)) continue;
+      const slug = entry.name.replace(/\.mdx?$/i, "");
+      if (merged.has(slug)) continue;
+      merged.set(
+        slug,
+        await fs.readFile(path.join(BLOG_DIR, entry.name), "utf-8")
+      );
+    }
+  } catch {
+    /* serverless: no readable blog dir, snapshot is enough */
+  }
+
   if (kvEnabled) {
     const keys = await kvKeys("blog:post:*");
     for (const key of keys) {
       const slug = key.replace("blog:post:", "");
       const raw = await kvGet<string>(key, "");
-      if (!raw) continue;
-      const meta = parsePostFile(`${slug}.md`, raw);
-      if (meta) posts.push(meta);
+      if (raw) merged.set(slug, raw);
     }
-  } else {
-    const entries = await fs.readdir(BLOG_DIR, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile()) continue;
-      const raw = await fs.readFile(path.join(BLOG_DIR, entry.name), "utf-8");
-      const meta = parsePostFile(entry.name, raw);
-      if (meta) posts.push(meta);
+    const trashed = await kvKeys("blog:trash:*");
+    for (const key of trashed) {
+      merged.delete(key.replace("blog:trash:", ""));
     }
+  }
+  return merged;
+}
+
+export async function listPosts(): Promise<PostMeta[]> {
+  const posts: PostMeta[] = [];
+  const raws = await allRawPosts();
+  for (const [slug, raw] of raws) {
+    const meta = parsePostFile(`${slug}.md`, raw);
+    if (meta) posts.push(meta);
   }
   return posts.sort(
     (a, b) =>
@@ -145,16 +181,13 @@ export async function getPost(
       const { data, content } = matter(raw);
       return { slug: safe, frontmatter: data, content };
     }
-    return null;
   }
-  for (const ext of [".md", ".mdx"]) {
-    try {
-      const raw = await fs.readFile(path.join(BLOG_DIR, safe + ext), "utf-8");
-      const { data, content } = matter(raw);
-      return { slug: safe, frontmatter: data, content };
-    } catch {
-      /* try next extension */
-    }
+  // Fall back to the repo copy (works read-only on Vercel via the snapshot).
+  const raws = await allRawPosts();
+  const raw = raws.get(safe);
+  if (raw) {
+    const { data, content } = matter(raw);
+    return { slug: safe, frontmatter: data, content };
   }
   return null;
 }
@@ -212,10 +245,12 @@ export async function trashPost(slug: string): Promise<boolean> {
   const safe = safeSlug(slug);
   if (!safe) return false;
   if (kvEnabled) {
-    const exists = await kvGet<string>(`blog:post:${safe}`, "");
-    if (!exists) return false;
+    const inRedis = Boolean(await kvGet<string>(`blog:post:${safe}`, ""));
+    // A post that only exists as a repo file still needs a tombstone,
+    // otherwise the next build would restore it from src/data/blog.
+    if (!inRedis && !(await allRawPosts()).has(safe)) return false;
     await kvSet(`blog:trash:${safe}`, new Date().toISOString());
-    await kvDel(`blog:post:${safe}`);
+    if (inRedis) await kvDel(`blog:post:${safe}`);
     return true;
   }
   for (const ext of [".md", ".mdx"]) {

@@ -1,11 +1,19 @@
 /**
- * Build-time content sync: pull posts saved through the admin backend (Redis)
- * back into src/data/blog/*.md so the static build includes them.
+ * Build-time content sync.
  *
- * Runs before `astro build`. Skips silently when no Redis env is configured.
- * Also applies deletions made in the admin (blog:trash:<slug>).
+ * 1. Pull posts saved through the admin backend (Redis) back into
+ *    src/data/blog/*.md so the static build includes them, and apply
+ *    deletions recorded as `blog:trash:<slug>` tombstones.
+ * 2. Snapshot every local markdown post into `src/generated/postsSnapshot.ts`.
+ *    The Vercel function bundle only ships files the tracer can see, and
+ *    `src/data/blog/*.md` is not one of them — the admin backend therefore
+ *    cannot list existing article files at runtime. A generated module is
+ *    statically imported, so it is always bundled.
  *
- * Two transports, mirroring src/utils/kvStore.ts:
+ * Runs before `astro build`. Skips the Redis part silently when no Redis env
+ * is configured; the snapshot is always written.
+ *
+ * Two Redis transports, mirroring src/utils/kvStore.ts:
  *   REST — KV_REST_API_URL + KV_REST_API_TOKEN (Upstash)
  *   TCP  — REDIS_URL / KV_URL (any Redis, e.g. Redis Cloud), via ioredis
  */
@@ -22,6 +30,8 @@ const REST_TOKEN =
 const TCP_URL = process.env.REDIS_URL || process.env.KV_URL || "";
 
 const BLOG_DIR = path.resolve("src/data/blog");
+const GENERATED_DIR = path.resolve("src/generated");
+const SNAPSHOT_FILE = path.join(GENERATED_DIR, "postsSnapshot.ts");
 
 const tcpUsable = (() => {
   if (!TCP_URL) return false;
@@ -33,15 +43,9 @@ const tcpUsable = (() => {
 })();
 
 const mode = REST_URL && REST_TOKEN ? "rest" : tcpUsable ? "tcp" : "none";
-
-if (mode === "none") {
-  console.log("[sync-kv] no Redis configured, skipping");
-  process.exit(0);
-}
+const enc = encodeURIComponent;
 
 console.log(`[sync-kv] transport: ${mode}`);
-
-const enc = encodeURIComponent;
 
 async function rest(command) {
   const res = await fetch(`${REST_URL}/${command}`, {
@@ -73,7 +77,9 @@ async function cmdGet(key) {
 }
 async function cmdKeys(pattern) {
   const out =
-    mode === "rest" ? await rest(`keys/${enc(pattern)}`) : await (await tcp()).keys(pattern);
+    mode === "rest"
+      ? await rest(`keys/${enc(pattern)}`)
+      : await (await tcp()).keys(pattern);
   return out || [];
 }
 async function cmdDel(key) {
@@ -82,36 +88,40 @@ async function cmdDel(key) {
 
 await fs.mkdir(BLOG_DIR, { recursive: true });
 
-// 1) upsert saved posts
-const keys = await cmdKeys("blog:post:*");
 let written = 0;
-for (const key of keys) {
-  const slug = key.replace("blog:post:", "");
-  if (!/^[a-z0-9-]+$/.test(slug)) continue;
-  const raw = await cmdGet(key);
-  if (!raw) continue;
-  await fs.writeFile(path.join(BLOG_DIR, `${slug}.md`), String(raw), "utf-8");
-  written += 1;
-  console.log(`[sync-kv] wrote ${slug}.md`);
-}
-
-// 2) apply deletions
-const trashKeys = await cmdKeys("blog:trash:*");
 let removed = 0;
-for (const key of trashKeys) {
-  const slug = key.replace("blog:trash:", "");
-  if (!/^[a-z0-9-]+$/.test(slug)) continue;
-  for (const ext of [".md", ".mdx"]) {
-    try {
-      await fs.rm(path.join(BLOG_DIR, slug + ext), { force: true });
-      removed += 1;
-    } catch {
-      /* ignore */
-    }
+
+// 1) Redis → files
+if (mode !== "none") {
+  const keys = await cmdKeys("blog:post:*");
+  for (const key of keys) {
+    const slug = key.replace("blog:post:", "");
+    if (!/^[a-z0-9-]+$/.test(slug)) continue;
+    const raw = await cmdGet(key);
+    if (!raw) continue;
+    await fs.writeFile(path.join(BLOG_DIR, `${slug}.md`), String(raw), "utf-8");
+    written += 1;
+    console.log(`[sync-kv] wrote ${slug}.md`);
   }
-  // consume the tombstone so it only applies once per deploy
-  await cmdDel(key);
-  console.log(`[sync-kv] removed ${slug}`);
+
+  const trashKeys = await cmdKeys("blog:trash:*");
+  for (const key of trashKeys) {
+    const slug = key.replace("blog:trash:", "");
+    if (!/^[a-z0-9-]+$/.test(slug)) continue;
+    let gone = false;
+    for (const ext of [".md", ".mdx"]) {
+      try {
+        await fs.rm(path.join(BLOG_DIR, slug + ext), { force: true });
+        gone = true;
+      } catch {
+        /* ignore */
+      }
+    }
+    // consume the tombstone so it only applies once per deploy
+    await cmdDel(key);
+    if (gone) removed += 1;
+    console.log(`[sync-kv] removed ${slug}`);
+  }
 }
 
 if (redis) {
@@ -122,4 +132,27 @@ if (redis) {
   }
 }
 
-console.log(`[sync-kv] done: ${written} written, ${removed} removed`);
+// 2) Snapshot every local post for the admin backend
+const entries = await fs.readdir(BLOG_DIR, { withFileTypes: true });
+const snapshot = [];
+for (const entry of entries) {
+  if (!entry.isFile() || entry.name.startsWith("_")) continue;
+  if (!/\.mdx?$/i.test(entry.name)) continue;
+  const slug = entry.name.replace(/\.mdx?$/i, "");
+  const raw = await fs.readFile(path.join(BLOG_DIR, entry.name), "utf-8");
+  snapshot.push({ slug, raw });
+}
+await fs.mkdir(GENERATED_DIR, { recursive: true });
+await fs.writeFile(
+  SNAPSHOT_FILE,
+  `// AUTO-GENERATED by scripts/sync-kv-content.mjs — do not edit.\n` +
+    `// The admin backend runs on a read-only serverless filesystem and cannot\n` +
+    `// enumerate src/data/blog/*.md at runtime, so the list is baked in here.\n` +
+    `export type PostSnapshot = { slug: string; raw: string };\n` +
+    `export const postsSnapshot: PostSnapshot[] = ${JSON.stringify(snapshot)};\n`,
+  "utf-8"
+);
+
+console.log(
+  `[sync-kv] done: ${written} written, ${removed} removed, ${snapshot.length} in snapshot`
+);

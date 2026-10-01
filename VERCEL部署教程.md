@@ -175,6 +175,24 @@ EROFS: read-only file system, open '/var/task/src/data/blog/xxx.md'
 
 现在代码也会提前拦截这种情况：未启用 KV 时导入接口直接返回 503 + 中文说明，不会再抛裸的 EROFS。
 
+### 4.2 后台看不到已有文章 / 后台保存的文章前台看不到
+
+这是**静态站 + 服务端后台**的固有落差，两侧的数据来源不同：
+
+- 前台：`src/data/blog/*.md` 在**构建时**被编译成静态页。
+- 后台：跑在 Serverless 函数里，文件系统只读，**运行时读不到那些 md 文件**，只能读写 Redis。
+
+为此做了两件事：
+
+1. **后台能看到已有文章**：构建前 `scripts/sync-kv-content.mjs` 会把 `src/data/blog/*.md` 全部快照进 `src/generated/postsSnapshot.ts`（自动生成，勿手改），后台读取时把它和 Redis 里的文章合并（同 slug 以 Redis 为准），再剔除 `blog:trash:*` 墓碑。所以仓库里的文章和后台新增的文章会一起显示。
+2. **后台新增的文章能上线**：保存/导入/删除后会调用 `DEPLOY_HOOK_URL` 触发一次重新部署；构建时同步脚本把 Redis 里的文章落盘进 `src/data/blog/`，于是下一次构建就包含新文章。
+
+**如果保存后前台还是不显示**，按顺序查：
+
+- 后台「设置」→「自动重新部署」显示**未配置** → 去 **Settings → Git → Deploy Hooks** 创建钩子，把 URL 配成环境变量 `DEPLOY_HOOK_URL`，再 **Redeploy** 一次。没配钩子的话，文章只是存进了 Redis，要等下次 Git 推送才会上线。
+- 显示已配置但仍不更新 → 看构建日志里有没有 `[sync-kv] wrote xxx.md`；没有说明 Redis 读不到（回到 **3.1** 检查变量）。
+- 文章 `draft: true` 时前台不显示，这是预期行为。
+
 ### 5. 自定义域名
 在 Vercel 项目 **Settings → Domains** 中添加你的域名，按提示配置 DNS（CNAME 指向 `cname.vercel-dns.com` 或添加 TXT 验证），Vercel 会自动签发 SSL 证书。
 

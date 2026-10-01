@@ -5,6 +5,7 @@ import matter from "gray-matter";
 import { isAuthed } from "@/utils/adminAuth";
 import { appendLog, getPost, savePost } from "@/utils/adminStore";
 import { kvEnabled } from "@/utils/kvStore";
+import { triggerRedeploy } from "@/utils/redeploy";
 import { slugify } from "@/utils/slug";
 
 const unauthorized = () =>
@@ -18,13 +19,6 @@ const json = (data: unknown, status = 200) =>
     status,
     headers: { "Content-Type": "application/json" },
   });
-
-/** Fire-and-forget Vercel deploy hook so imported posts go live. */
-function triggerRebuild(): void {
-  const hook = import.meta.env.DEPLOY_HOOK_URL as string | undefined;
-  if (!hook) return;
-  fetch(hook, { method: "POST" }).catch(() => {});
-}
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB per file
 
@@ -76,8 +70,8 @@ export const POST: APIRoute = async Astro => {
       {
         ok: false,
         message:
-          "线上未启用 KV 存储：请在 Vercel 项目设置里绑定 Redis(Upstash) 数据库，" +
-          "让 KV_REST_API_URL / KV_REST_API_TOKEN 自动注入，然后重新部署。",
+          "线上未启用 Redis 存储：请在 Vercel 项目设置里绑定 Redis 数据库，" +
+          "让 KV_REST_API_URL / KV_REST_API_TOKEN 或 REDIS_URL 自动注入，然后重新部署。",
       },
       503
     );
@@ -208,13 +202,13 @@ export const POST: APIRoute = async Astro => {
 
   const created = results.filter(r => r.status === "created").length;
   const updated = results.filter(r => r.status === "updated").length;
+  let deploy = { triggered: false, message: "" };
   if (created + updated > 0) {
     await appendLog(
       "导入文章",
       `成功 ${created + updated} 篇（新建 ${created} / 覆盖 ${updated}）`
     );
-    triggerRebuild();
+    deploy = await triggerRedeploy();
   }
-
-  return json({ ok: true, results });
+  return json({ ok: true, results, deploy });
 };

@@ -10,6 +10,7 @@ if (!(await isAuthed(Astro.cookies))) {
 }
 import { passwordSource } from "@/utils/adminAuth";
 import { kvEnabled, kvProbe, kvStatus } from "@/utils/kvStore";
+import { deployHookConfigured } from "@/utils/redeploy";
 
 const source = await passwordSource();
 const sourceText: Record<typeof source, string> = {
@@ -42,6 +43,7 @@ const envDiagnostics = {
   vercelEnv: process.env.VERCEL_ENV || "(空)",
   region: process.env.VERCEL_REGION || "(空)",
   transport: kvStatus.transport,
+  deployHook: deployHookConfigured() ? "已配置" : "未配置",
   source: kvStatus.source,
   endpoint: kvStatus.endpoint,
   seen: Object.keys(process.env)
@@ -148,6 +150,14 @@ const inputClass =
           <dt class="shrink-0">读写自检：</dt>
           <dd class={probe.ok ? "text-emerald-600" : "text-red-500/90"}>
             {probe.ok ? "通过（写入/读取/删除均正常）" : `失败：${probe.error}`}
+          </dd>
+        </div>
+        <div class="flex gap-2">
+          <dt class="shrink-0">自动重新部署：</dt>
+          <dd class={envDiagnostics.deployHook === "已配置" ? "text-emerald-600" : "text-red-500/90"}>
+            {envDiagnostics.deployHook === "已配置"
+              ? "已配置 DEPLOY_HOOK_URL，保存/导入后约 1 分钟前台生效"
+              : "未配置 DEPLOY_HOOK_URL：文章已保存，但前台要等下次 Git 推送或手动 Redeploy 才更新"}
           </dd>
         </div>
         <div class="flex gap-2">
