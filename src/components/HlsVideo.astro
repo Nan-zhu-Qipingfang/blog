@@ -2,9 +2,10 @@
 /**
  * 给带 data-hls-src 的 <video> 挂上 hls.js。
  *
- * m3u8（HLS）流只有 Safari / iOS 能原生播放，Chrome、Edge、Firefox 都放不出来，
- * 必须靠 hls.js 转封装成 MSE。这里按需动态 import：文章里没有 HLS 视频时，
- * 这段 300KB 左右的解码器根本不会被下载。
+ * m3u8（HLS）交给 hls.js 转成 MSE 播放：Chrome / Edge / Firefox 都不能原生放
+ * HLS（哪怕 canPlayType('application/vnd.apple.mpegurl') 返回 "maybe"）。
+ * 这里按需动态 import：文章里没有 HLS 视频时，这段 300KB 左右的解封装器
+ * 根本不会被下载。
  */
 ---
 
@@ -56,6 +57,26 @@
     return `视频加载失败：${details || "未知错误"}${status}`;
   }
 
+  /** 卡在"已开始加载但一直没出画面"时给出可操作的提示，而不是干等。 */
+  const watchTimers = new Set();
+
+  function watchStall(video) {
+    const timer = window.setTimeout(() => {
+      watchTimers.delete(timer);
+      if (video.readyState === 0) {
+        fail(video, "视频迟迟没有开始播放：可能是源站限速、网络不通，或该浏览器不支持当前编码。");
+      }
+    }, 12000);
+    watchTimers.add(timer);
+  }
+
+  function stopWatch(video) {
+    watchTimers.forEach(timer => {
+      window.clearTimeout(timer);
+      watchTimers.delete(timer);
+    });
+  }
+
   async function mount(video) {
     // 用 data 标记而不是 WeakSet：同一个 video 只挂一次，
     // 即使这段脚本被重复注入（多个组件都引用了它）也不会重复 attach
@@ -65,30 +86,37 @@
     const src = video.getAttribute("data-hls-src");
     if (!src) return;
 
-    // Safari / iOS 原生支持 HLS，直接给 src 更省电
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = src;
-      // Safari 拿到的是 JSON 错误页时不会抛 hls.js 错误，只有媒体元素自己报错
-      video.addEventListener("error", () =>
-        fail(video, "该视频无法播放：源站返回的内容不是可播放的视频（链接可能已失效）")
-      );
-      return;
-    }
-
     const mod = await loadHls();
     const Hls = mod && (mod.default || mod);
-    if (!Hls || (typeof Hls.isSupported === "function" && !Hls.isSupported())) {
-      fail(video, "当前浏览器无法播放该视频（HLS / m3u8）");
+
+    // hls.js 优先（hls.js 官方推荐顺序）。
+    // 不能先用 canPlayType('application/vnd.apple.mpegurl') 判断：Chromium
+    // 系会返回 "maybe"，于是走原生 <video src="*.m3u8">，而 Chromium 的原生
+    // 媒体栈解不了 m3u8 —— 表现就是拿到播放列表后报
+    // MEDIA_ERR_SRC_NOT_SUPPORTED(4)，黑屏 + 0:00。
+    if (Hls && typeof Hls.isSupported === "function" && Hls.isSupported()) {
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+      instances.add(hls);
+      hls.on(Hls.Events.ERROR, (_evt, data) => {
+        if (data && data.fatal) fail(video, hlsMessage(data));
+      });
+      hls.on(Hls.Events.MANIFEST_PARSED, stopWatch);
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      watchStall(video);
       return;
     }
 
-    const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
-    instances.add(hls);
-    hls.on(Hls.Events.ERROR, (_evt, data) => {
-      if (data && data.fatal) fail(video, hlsMessage(data));
-    });
-    hls.loadSource(src);
-    hls.attachMedia(video);
+    // 兜底：hls.js 没加载成功（动态 import 失败 / 老 Safari、iOS 原生）就直接
+    // 给 src 让浏览器自己试试。Safari 能原生播且更省电；播不出来时由下面的
+    // error 监听出提示，比现在就断言"浏览器不支持"准确得多。
+    video.src = src;
+    video.addEventListener("error", () =>
+      fail(
+        video,
+        "该视频无法播放：当前浏览器不能直接播放 m3u8（可改用 mp4 直链），或源站不可达。"
+      )
+    );
   }
 
   function init() {
@@ -98,6 +126,7 @@
   }
 
   function destroy() {
+    stopWatch();
     instances.forEach(hls => {
       try {
         hls.destroy();
