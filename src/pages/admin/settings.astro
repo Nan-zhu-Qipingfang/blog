@@ -32,6 +32,19 @@ const storageText = storageOk
     ? `未检测到环境变量：${missingVars.join("、")}。绑定 Redis 后必须点击一次 Redeploy，已部署的函数实例不会自动刷新环境变量。`
     : "未检测到 KV 存储。线上文件系统只读，导入与保存文章会失败。请在 Vercel 项目设置里绑定 Redis(Upstash) 数据库并重新部署。";
 
+// Diagnostics: which storage-related env var NAMES are actually visible to the
+// running function (values are never printed). This settles "I connected the
+// database but it still says KV is off" — either the names differ, or the
+// variable is scoped to a different Vercel environment.
+const envDiagnostics = {
+  vercel: process.env.VERCEL ? "是" : "否",
+  vercelEnv: process.env.VERCEL_ENV || "(空)",
+  region: process.env.VERCEL_REGION || "(空)",
+  seen: Object.keys(process.env)
+    .filter(k => /kv|upstash|redis|storage/i.test(k))
+    .sort(),
+};
+
 const inputClass =
   "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-accent/60";
 ---
@@ -94,6 +107,29 @@ const inputClass =
           >{storageText}</span
         >
       </p>
+      <dl
+        class="mt-3 grid gap-1.5 border-t border-border/40 pt-3 text-xs text-foreground/45"
+      >
+        <div class="flex gap-2">
+          <dt class="shrink-0">运行在 Vercel：</dt>
+          <dd>
+            {envDiagnostics.vercel}（VERCEL_ENV={
+              envDiagnostics.vercelEnv
+            }，区域{" "}
+            {envDiagnostics.region}）
+          </dd>
+        </div>
+        <div class="flex gap-2">
+          <dt class="shrink-0">可见的存储类变量：</dt>
+          <dd class="break-all">
+            {
+              envDiagnostics.seen.length
+                ? envDiagnostics.seen.join("、")
+                : "（一个都没有）"
+            }
+          </dd>
+        </div>
+      </dl>
     </section>
 
     <section class="bg-card/60 mt-4 rounded-2xl border border-border/60 p-5">

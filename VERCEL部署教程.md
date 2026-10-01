@@ -119,7 +119,19 @@ cpSync(_staticDir, "./.vercel/output/static/", { recursive: true });
 > 说明：
 > - 不配置 KV 时本地开发一切正常（自动回退到本地 JSON 文件），只是线上后台的数据无法持久化，**且改密码、写文章、导入 MD 都会失败**。
 > - 后台账号密码见 **3.0**：源码内已无默认密码，必须在环境变量 `ADMIN_PASSWORD` 里配置。登录后可在「设置」页改密码（改后的密码保存在 KV 里）。
-> - KV 里的文章仅是“发布暂存区”，正式内容仍以 Git 仓库 `src/data/blog/*.md` 为准；同步脚本每次构建时把 KV 内容覆盖写入文件。
+> - KV 里的文章仅是"发布暂存区"，正式内容仍以 Git 仓库 `src/data/blog/*.md` 为准；同步脚本每次构建时把 KV 内容覆盖写入文件。
+
+**绑定后仍显示"KV 未启用"怎么办**：进后台「设置」页看「数据存储状态」，下面有两行诊断：
+
+- `运行在 Vercel`：正常应为「是」，`VERCEL_ENV=production`。
+- `可见的存储类变量`：会列出运行时真正读到的变量名（只列名字，不含值）。正常应看到 `KV_REST_API_URL`、`KV_REST_API_TOKEN` 或 `UPSTASH_REDIS_REST_URL`、`UPSTASH_REDIS_REST_TOKEN`。
+
+按诊断结果处理：
+
+1. **一个变量都没有** → 集成没有把变量注入到当前环境。打开项目 **Settings → Environment Variables** 确认；若确实为空，去 Upstash 控制台复制 REST URL 和 Token，**手动添加**为 `KV_REST_API_URL` 与 `KV_REST_API_TOKEN`（环境记得勾 Production 和 Preview），保存后 Redeploy。
+2. **变量名不在上述四个之内** → 把「可见的存储类变量」那一行的名字发出来，改代码适配即可。
+3. **`VERCEL_ENV` 不是 production** → 你当前访问的是预览环境，而变量只加到了 Production（或反之）。在 **Settings → Environment Variables** 里把缺失的环境勾上，或访问对应的环境。
+4. 无论如何，**改完环境变量都要 Redeploy 一次**。
 
 ---
 
