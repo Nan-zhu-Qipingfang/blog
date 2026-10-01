@@ -22,19 +22,16 @@ const sourceText: Record<typeof source, string> = {
 // logs) fails. Surface it here so the cause is obvious.
 const storageOk = kvEnabled;
 const missingVars = [
-  !kvStatus.url && "KV_REST_API_URL（或 UPSTASH_REDIS_REST_URL）",
-  !kvStatus.token && "KV_REST_API_TOKEN（或 UPSTASH_REDIS_REST_TOKEN）",
+  !kvStatus.url && !kvStatus.redisUrlUsable && "KV_REST_API_URL（或 UPSTASH_REDIS_REST_URL）",
+  !kvStatus.token && !kvStatus.redisUrlUsable && "KV_REST_API_TOKEN（或 UPSTASH_REDIS_REST_TOKEN）",
+  !kvStatus.redisUrlUsable && "REDIS_URL（任意 Redis，走 TCP 直连）",
 ].filter(Boolean);
 
 const storageText = storageOk
-  ? "KV 存储已启用：文章、日志正常持久化，保存后会自动触发重新部署。"
-  : kvStatus.redisUrlPresent
-    ? kvStatus.redisUrlUsable
-      ? "检测到 REDIS_URL，但它只是 Redis 直连地址（TCP），不能代替 REST API。请在 Vercel 项目环境变量中额外添加 KV_REST_API_URL 与 KV_REST_API_TOKEN，然后点击 Redeploy。"
-      : "检测到 REDIS_URL，但无法从中解析出主机或令牌。请手动添加 KV_REST_API_URL / KV_REST_API_TOKEN（Upstash 控制台里叫 REST URL / REST Token）。"
-    : missingVars.length
-      ? `未检测到环境变量：${missingVars.join("、")}。绑定 Redis 后必须点击一次 Redeploy，已部署的函数实例不会自动刷新环境变量。`
-      : "未检测到 KV 存储。线上文件系统只读，导入与保存文章会失败。请在 Vercel 项目设置里绑定 Redis(Upstash) 数据库并重新部署。";
+  ? kvStatus.transport === "tcp"
+    ? "Redis 已启用（TCP 直连 REDIS_URL）：文章、日志正常持久化，保存后会自动触发重新部署。"
+    : "KV 存储已启用（Upstash REST）：文章、日志正常持久化，保存后会自动触发重新部署。"
+  : `未检测到可用的 Redis 环境变量：${missingVars.join("、")}。二选一即可——Upstash 系填 KV_REST_API_URL + KV_REST_API_TOKEN，其他 Redis（如 Redis Cloud）填 REDIS_URL。添加后必须点击一次 Redeploy，已部署的函数实例不会自动刷新环境变量。`;
 
 // Diagnostics: which storage-related env var NAMES are actually visible to the
 // running function (values are never printed). This settles "I connected the
@@ -44,6 +41,7 @@ const envDiagnostics = {
   vercel: process.env.VERCEL ? "是" : "否",
   vercelEnv: process.env.VERCEL_ENV || "(空)",
   region: process.env.VERCEL_REGION || "(空)",
+  transport: kvStatus.transport,
   source: kvStatus.source,
   endpoint: kvStatus.endpoint,
   seen: Object.keys(process.env)
@@ -129,11 +127,21 @@ const inputClass =
           </dd>
         </div>
         <div class="flex gap-2">
+          <dt class="shrink-0">传输方式：</dt>
+          <dd>
+            {envDiagnostics.transport === "rest"
+              ? "REST（Upstash HTTP）"
+              : envDiagnostics.transport === "tcp"
+                ? "TCP 直连（ioredis）"
+                : "无（回落到本地文件）"}
+          </dd>
+        </div>
+        <div class="flex gap-2">
           <dt class="shrink-0">凭证来源：</dt>
           <dd class="break-all">{envDiagnostics.source}</dd>
         </div>
         <div class="flex gap-2">
-          <dt class="shrink-0">REST 端点：</dt>
+          <dt class="shrink-0">端点：</dt>
           <dd class="break-all">{envDiagnostics.endpoint}</dd>
         </div>
         <div class="flex gap-2">

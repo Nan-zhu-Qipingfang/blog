@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@astrojs/mdx':
         specifier: ^5.0.4
-        version: 5.0.4(astro@6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0))
+        version: 5.0.4(astro@6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(ioredis@6.0.0)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0))
       '@astrojs/rss':
         specifier: ^4.0.18
         version: 4.0.18
@@ -19,7 +19,7 @@ importers:
         version: 3.7.2
       '@astrojs/vercel':
         specifier: ^10.0.8
-        version: 10.0.8(astro@6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0))(rollup@4.60.3)
+        version: 10.0.8(astro@6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(ioredis@6.0.0)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0))(rollup@4.60.3)
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
@@ -28,13 +28,16 @@ importers:
         version: 4.3.0(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
       astro:
         specifier: ^6.3.1
-        version: 6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0)
+        version: 6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(ioredis@6.0.0)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0)
       dayjs:
         specifier: ^1.11.20
         version: 1.11.20
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0
       lodash.kebabcase:
         specifier: ^4.1.1
         version: 4.1.1
@@ -586,6 +589,9 @@ packages:
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [x64]
     os: [win32]
+
+  '@ioredis/commands@2.0.0':
+    resolution: {integrity: sha512-vrx0AE/T0h7cRZwfo1M39Cr+ZhZrkf0V8mQN75wucKCxCLD9l/VX6no3gFvrLqD1IlG/1LtzWovqEw3t0Vr9zg==}
 
   '@isaacs/fs-minipass@4.0.1':
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
@@ -1398,6 +1404,10 @@ packages:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
 
+  cluster-key-slot@1.1.1:
+    resolution: {integrity: sha512-rwHwUfXL40Chm1r08yrhU3qpUvdVlgkKNeyeGPOxnW8/SyVDvgRaed/Uz54AqWNaTCAThlj6QAs3TZcKI0xDEw==}
+    engines: {node: '>=0.10.0'}
+
   collapse-white-space@2.1.0:
     resolution: {integrity: sha512-loKTxY1zCOuG4j9f6EPnuyyYkf58RnhhWTvRoZEokgB+WbdXehfjFviyOVYkqzEWz1Q5kRiZdBYS5SwxbQYwzw==}
 
@@ -1498,6 +1508,10 @@ packages:
 
   defu@6.1.7:
     resolution: {integrity: sha512-7z22QmUWiQ/2d0KkdYmANbRUVABpZ9SNYyH5vx6PZ+nE5bcC0l7uFvEfHlyld/HcGBFTL536ClDt3DEcSlEJAQ==}
+
+  denque@2.1.0:
+    resolution: {integrity: sha512-HVQE3AAb/pxF8fQAoiqpvg9i3evqug3hoiwakOyZAwJm+6vZehbkYXZ0l4JxS+I3QxM97v5aaRNhj8v5oBhekw==}
+    engines: {node: '>=0.10'}
 
   dequal@2.0.3:
     resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
@@ -1902,6 +1916,10 @@ packages:
 
   inline-style-parser@0.2.7:
     resolution: {integrity: sha512-Nb2ctOyNR8DqQoR0OwRG95uNWIC0C1lCgf5Naz5H6Ji72KZ8OcFZLz2P5sNgwlyoJ8Yif11oMuYs5pBQa86csA==}
+
+  ioredis@6.0.0:
+    resolution: {integrity: sha512-f+Dtubxfpf6KYFq7WVXJoOLn0bk4TJrMrN9SzeE+jrWrCWj7XX3fA6vkryafhADX+GMymRxgDJDOI33COkJc0w==}
+    engines: {node: '>=20.0.0'}
 
   iron-webcrypto@1.2.1:
     resolution: {integrity: sha512-feOM6FaSr6rEABp/eDfVseKyTMDt+KGpeB35SkVn9Tyn0CqvVsY3EwI0v5i8nMHyJnzCIQf7nsy3p41TPkJZhg==}
@@ -2616,6 +2634,10 @@ packages:
   recma-stringify@1.0.0:
     resolution: {integrity: sha512-cjwII1MdIIVloKvC9ErQ+OgAtwHBmcZ0Bg4ciz78FtbT8In39aAYbaA7zvxQ61xVMSPE8WxhLwLbhif4Js2C+g==}
 
+  redis-errors@1.2.0:
+    resolution: {integrity: sha512-1qny3OExCf0UvUV/5wpYKf2YwPcOqXzkwKKSmKHiE6ZMQs5heeE/c8eXK+PNllPvmjgAbfnsbpkGZWy8cBpn9w==}
+    engines: {node: '>=4'}
+
   regex-recursion@6.0.2:
     resolution: {integrity: sha512-0YCaSCq2VRIebiaUviZNs0cBz1kg5kVS2UKUfNIx8YVs1cN3AV7NTctO5FOKBA+UT2BPJIWZauYHPqJODG50cg==}
 
@@ -2781,6 +2803,9 @@ packages:
 
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
+
+  standard-as-callback@2.1.0:
+    resolution: {integrity: sha512-qoRRSyROncaz1z0mvYqIE4lCd9p2R90i6GxW3uZv5ucSu8tU7B5HXUP1gG8pVZsYNVaXjk8ClXHPttLyxAL48A==}
 
   stream-replace-string@2.0.0:
     resolution: {integrity: sha512-TlnjJ1C0QrmxRNrON00JvaFFlNh5TTG00APw23j74ET7gkQpTASi6/L2fuiav8pzK715HXtUeClpBTw2NPSn6w==}
@@ -3347,12 +3372,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/mdx@5.0.4(astro@6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0))':
+  '@astrojs/mdx@5.0.4(astro@6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(ioredis@6.0.0)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0))':
     dependencies:
       '@astrojs/markdown-remark': 7.1.1
       '@mdx-js/mdx': 3.1.1
       acorn: 8.16.0
-      astro: 6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0)
+      astro: 6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(ioredis@6.0.0)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0)
       es-module-lexer: 2.1.0
       estree-util-visit: 2.0.0
       hast-util-to-html: 9.0.5
@@ -3390,14 +3415,14 @@ snapshots:
       is-wsl: 3.1.1
       which-pm-runs: 1.1.0
 
-  '@astrojs/vercel@10.0.8(astro@6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0))(rollup@4.60.3)':
+  '@astrojs/vercel@10.0.8(astro@6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(ioredis@6.0.0)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0))(rollup@4.60.3)':
     dependencies:
       '@astrojs/internal-helpers': 0.10.0
       '@vercel/analytics': 1.6.1
       '@vercel/functions': 3.9.9
       '@vercel/nft': 1.11.0(rollup@4.60.3)
       '@vercel/routing-utils': 5.3.3
-      astro: 6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0)
+      astro: 6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(ioredis@6.0.0)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0)
       esbuild: 0.27.7
       tinyglobby: 0.2.16
     transitivePeerDependencies:
@@ -3694,6 +3719,8 @@ snapshots:
 
   '@img/sharp-win32-x64@0.34.5':
     optional: true
+
+  '@ioredis/commands@2.0.0': {}
 
   '@isaacs/fs-minipass@4.0.1':
     dependencies:
@@ -4375,7 +4402,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  astro@6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0):
+  astro@6.3.1(@types/node@24.12.4)(@vercel/functions@3.9.9)(ioredis@6.0.0)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.3)(yaml@2.9.0):
     dependencies:
       '@astrojs/compiler': 4.0.0
       '@astrojs/internal-helpers': 0.9.0
@@ -4425,7 +4452,7 @@ snapshots:
       ultrahtml: 1.6.0
       unifont: 0.7.4
       unist-util-visit: 5.1.0
-      unstorage: 1.17.5(@vercel/functions@3.9.9)
+      unstorage: 1.17.5(@vercel/functions@3.9.9)(ioredis@6.0.0)
       vfile: 6.0.3
       vite: 7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
       vitefu: 1.1.3(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
@@ -4529,6 +4556,8 @@ snapshots:
 
   clsx@2.1.1: {}
 
+  cluster-key-slot@1.1.1: {}
+
   collapse-white-space@2.1.0: {}
 
   color-convert@2.0.1:
@@ -4612,6 +4641,8 @@ snapshots:
   deep-is@0.1.4: {}
 
   defu@6.1.7: {}
+
+  denque@2.1.0: {}
 
   dequal@2.0.3: {}
 
@@ -5159,6 +5190,17 @@ snapshots:
   imurmurhash@0.1.4: {}
 
   inline-style-parser@0.2.7: {}
+
+  ioredis@6.0.0:
+    dependencies:
+      '@ioredis/commands': 2.0.0
+      cluster-key-slot: 1.1.1
+      debug: 4.4.3
+      denque: 2.1.0
+      redis-errors: 1.2.0
+      standard-as-callback: 2.1.0
+    transitivePeerDependencies:
+      - supports-color
 
   iron-webcrypto@1.2.1: {}
 
@@ -6033,6 +6075,8 @@ snapshots:
       unified: 11.0.5
       vfile: 6.0.3
 
+  redis-errors@1.2.0: {}
+
   regex-recursion@6.0.2:
     dependencies:
       regex-utilities: 2.3.0
@@ -6308,6 +6352,8 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
+  standard-as-callback@2.1.0: {}
+
   stream-replace-string@2.0.0: {}
 
   string-width@4.2.3:
@@ -6497,7 +6543,7 @@ snapshots:
       unist-util-is: 6.0.1
       unist-util-visit-parents: 6.0.2
 
-  unstorage@1.17.5(@vercel/functions@3.9.9):
+  unstorage@1.17.5(@vercel/functions@3.9.9)(ioredis@6.0.0):
     dependencies:
       anymatch: 3.1.3
       chokidar: 5.0.0
@@ -6509,6 +6555,7 @@ snapshots:
       ufo: 1.6.4
     optionalDependencies:
       '@vercel/functions': 3.9.9
+      ioredis: 6.0.0
 
   uri-js@4.4.1:
     dependencies:

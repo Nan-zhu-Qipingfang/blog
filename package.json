@@ -26,6 +26,7 @@
     "astro": "^6.3.1",
     "dayjs": "^1.11.20",
     "gray-matter": "^4.0.3",
+    "ioredis": "^6.0.0",
     "lodash.kebabcase": "^4.1.1",
     "marked": "^18.0.14",
     "pagefind": "^1.5.2",

@@ -106,10 +106,19 @@ cpSync(_staticDir, "./.vercel/output/static/", { recursive: true });
 
 **为什么之前会报错**：Vercel 的 Serverless Functions 文件系统是**只读**的，而旧版后台把账号、日志、评论等写在项目内的 JSON 文件里 → 登录流程一写文件就 500，前端只能显示“网络错误”。
 
-现在的方案：后台数据（管理员密码、操作日志、站内用户、评论、后台保存的文章）统一走 **KV 存储**（兼容 Vercel KV 与 Upstash Redis）。配置步骤：
+现在的方案：后台数据（管理员密码、操作日志、站内用户、评论、后台保存的文章）统一走 **Redis 存储**。代码支持两种接入方式，会自动识别（优先 REST）：
 
-1. 进入 Vercel 项目 → **Storage** 标签 → **Create Database** → 选择 **Redis (Upstash)**（Hobby 免费套餐够用）。
-2. 创建后点击 **Connect to Project**，选择本项目并 **Connect** —— Vercel 会自动注入 `KV_REST_API_URL` 和 `KV_REST_API_TOKEN` 两个环境变量，**无需手动填写**。
+| 方式 | 需要的环境变量 | 适用 |
+|---|---|---|
+| **REST** | `KV_REST_API_URL` + `KV_REST_API_TOKEN`（或 `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`） | Upstash 系（Vercel KV / Upstash Redis） |
+| **TCP 直连** | `REDIS_URL`（或 `KV_URL`），形如 `redis://default:密码@host:port` | 任意 Redis，如 **Redis Cloud**、自托管 |
+
+配置步骤：
+
+1. 进入 Vercel 项目 → **Storage** 标签 → **Create Database** → 选一个 Redis（Upstash 或其他都行，Hobby 免费套餐够用）。
+2. 创建后点击 **Connect to Project**，选择本项目并 **Connect**。
+   - Upstash 系：会自动注入 `KV_REST_API_URL` / `KV_REST_API_TOKEN`，**无需手动填写**。
+   - 其他厂商（如 Redis Cloud `cloud.redis.io`）：通常只注入 `REDIS_URL`，**这也够用**，代码会用 `ioredis` 走 TCP 直连（Node.js runtime 支持 TCP）。
 3. （可选，推荐）让“后台保存的文章自动发布上线”：
    - 进入 **Settings → Git → Deploy Hooks**，随便起个名字（如 `admin-save`）和分支 `main`，创建后会得到一个形如 `https://api.vercel.com/v1/integrations/deploy/...` 的 URL；
    - 把这个 URL 添加为环境变量 `DEPLOY_HOOK_URL`。
@@ -124,12 +133,13 @@ cpSync(_staticDir, "./.vercel/output/static/", { recursive: true });
 **绑定后仍显示"KV 未启用"怎么办**：进后台「设置」页看「数据存储状态」，下面有两行诊断：
 
 - `运行在 Vercel`：正常应为「是」，`VERCEL_ENV=production`。
-- `可见的存储类变量`：会列出运行时真正读到的变量名（只列名字，不含值）。正常应看到 `KV_REST_API_URL`、`KV_REST_API_TOKEN` 或 `UPSTASH_REDIS_REST_URL`、`UPSTASH_REDIS_REST_TOKEN`。
+- `可见的存储类变量`：会列出运行时真正读到的变量名（只列名字，不含值）。正常应看到 `KV_REST_API_URL`、`KV_REST_API_TOKEN`、`UPSTASH_REDIS_REST_*` 或 `REDIS_URL` 中的一组。
 
 按诊断结果处理：
 
-1. **一个变量都没有** → 集成没有把变量注入到当前环境。打开项目 **Settings → Environment Variables** 确认；若确实为空，去 Upstash 控制台复制 REST URL 和 Token，**手动添加**为 `KV_REST_API_URL` 与 `KV_REST_API_TOKEN`（环境记得勾 Production 和 Preview），保存后 Redeploy。
-2. **变量名不在上述四个之内** → 若看到的是 `REDIS_URL`（`rediss://default:TOKEN@host:port`），它只是 Redis 直连地址，**不能代替 REST API**。请去 Upstash 控制台复制 **REST URL** 和 **REST Token**，手动添加为 `KV_REST_API_URL` 与 `KV_REST_API_TOKEN`（环境记得勾 Production 和 Preview），保存后 Redeploy。若自检仍失败，把「可见的存储类变量」那一行的名字发出来，改代码适配即可。
+1. **一个变量都没有** → 集成没有把变量注入到当前环境。打开项目 **Settings → Environment Variables** 确认；若确实为空，手动添加上面表格里任意一组（环境记得勾 Production 和 Preview），保存后 Redeploy。
+2. **只有 `REDIS_URL`** → 正常，会走 **TCP 直连**，不需要 REST Token。若自检仍失败，多半是连接串格式不对或网络不通：确认它是 `redis://user:pass@host:port`（或 `rediss://`），且端口号正确。
+3. **只有 `KV_REST_API_URL` 没有 Token**（或反之）→ REST 方式必须两个都有，缺的补上；否则会回落到 `REDIS_URL`（如果有的话）。
 3. **`VERCEL_ENV` 不是 production** → 你当前访问的是预览环境，而变量只加到了 Production（或反之）。在 **Settings → Environment Variables** 里把缺失的环境勾上，或访问对应的环境。
 4. 无论如何，**改完环境变量都要 Redeploy 一次**。
 
