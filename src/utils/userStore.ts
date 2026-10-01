@@ -29,6 +29,14 @@ export interface SiteComment {
   name: string;
   content: string;
   createdAt: string;
+  /** 称号（站长手动写，如「站长」「热心网友」） */
+  badge?: string;
+  /** 是否置顶（后台管理，前台置顶评论排在最前） */
+  pinned?: boolean;
+  /** IP 属地，如「中国 · 浙江 · 杭州」；查不到就空着 */
+  region?: string;
+  /** 站长的评论自动挂「站长」称号 */
+  isOwner?: boolean;
 }
 
 export interface PortalLink {
@@ -105,7 +113,10 @@ export function verifyUserPassword(user: SiteUser, password: string): boolean {
 export async function listComments(slug?: string): Promise<SiteComment[]> {
   const all = await readJson(COMMENTS, []);
   const items = slug ? all.filter(c => c.slug === slug) : all;
-  return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // 置顶的一律排最前，其余按时间倒序
+  return items.sort(
+    (a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.createdAt.localeCompare(a.createdAt),
+  );
 }
 
 export async function addComment(
@@ -113,6 +124,7 @@ export async function addComment(
   userId: string,
   name: string,
   content: string,
+  extra: { region?: string; isOwner?: boolean } = {},
 ): Promise<SiteComment> {
   const all = await readJson(COMMENTS, []);
   const comment: SiteComment = {
@@ -122,10 +134,35 @@ export async function addComment(
     name,
     content: content.trim().slice(0, 1000),
     createdAt: new Date().toISOString(),
+    region: extra.region ?? "",
+    isOwner: Boolean(extra.isOwner),
   };
   all.push(comment);
   await writeJson(COMMENTS, all);
   return comment;
+}
+
+/** 后台管理：改置顶 / 称号 / 属地。 */
+export async function updateComment(
+  id: string,
+  patch: { pinned?: boolean; badge?: string | null; region?: string | null },
+): Promise<boolean> {
+  const all = await readJson(COMMENTS, []);
+  const target = all.find(c => c.id === id);
+  if (!target) return false;
+  if (typeof patch.pinned === "boolean") target.pinned = patch.pinned;
+  if (patch.badge !== undefined) {
+    const b = String(patch.badge ?? "").trim().slice(0, 12);
+    if (b) target.badge = b;
+    else delete target.badge;
+  }
+  if (patch.region !== undefined) {
+    const r = String(patch.region ?? "").trim().slice(0, 40);
+    if (r) target.region = r;
+    else delete target.region;
+  }
+  await writeJson(COMMENTS, all);
+  return true;
 }
 
 export async function deleteComment(id: string): Promise<boolean> {

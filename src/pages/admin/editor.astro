@@ -131,6 +131,22 @@ const views = [
           <span class="mb-1.5 block text-xs font-medium text-foreground/60">描述（摘要）</span>
           <textarea id="f-desc" rows="2" class="glass-field w-full resize-y px-3.5 py-2.5 text-sm" placeholder="显示在文章列表与分享卡片上的摘要"></textarea>
         </label>
+        <div class="block sm:col-span-2">
+          <span class="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs font-medium text-foreground/60">
+            <span>文章封面（文章页顶部横幅，留空则不显示）</span>
+            <a href="/admin/cover" target="_blank" class="text-accent no-underline hover:underline">打开封面工作台 ›</a>
+          </span>
+          <input
+            id="f-cover"
+            type="text"
+            class="glass-field w-full px-3.5 py-2.5 font-firacode text-sm"
+            placeholder="留空 / 外链地址 / /api/cover/&lt;slug&gt;"
+          />
+          <span class="mt-1 block text-[11px] text-foreground/35">
+            推荐用「封面工作台」一键生成：它会自动写好 <code>/api/cover/&lt;slug&gt;</code>（由
+            <code>/api/cover</code> 接口实时出图，不需要图床）。这里填外链地址也可以。
+          </span>
+        </div>
         <label class="block">
           <span class="mb-1.5 block text-xs font-medium text-foreground/60">发布时间</span>
           <input id="f-date" type="datetime-local" class="glass-field w-full px-3.5 py-2.5 font-firacode text-sm" />
@@ -887,6 +903,7 @@ const views = [
           pubDatetime: new Date(($("f-date") as HTMLInputElement).value).toISOString(),
           featured: ($("f-featured") as HTMLInputElement).checked,
           draft: ($("f-draft") as HTMLInputElement).checked,
+          coverImage: ($("f-cover") as HTMLInputElement).value.trim(),
           content,
         }),
       });
@@ -1102,6 +1119,7 @@ const views = [
       ($("f-date") as HTMLInputElement).value = toLocalInput(String(fm.pubDatetime ?? ""));
       ($("f-featured") as HTMLInputElement).checked = Boolean(fm.featured);
       ($("f-draft") as HTMLInputElement).checked = Boolean(fm.draft);
+      ($("f-cover") as HTMLInputElement).value = String(fm.coverImage ?? "");
       afterLoad(post.content);
       $("editor-sub").textContent = `正在编辑 src/data/blog/${post.slug}.md`;
     })();

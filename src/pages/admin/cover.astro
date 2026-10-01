@@ -1,0 +1,408 @@
+---
+export const prerender = false;
+
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { isAuthed } from "@/utils/adminAuth";
+import { listPosts } from "@/utils/adminStore";
+import { SITE } from "@/config";
+
+if (!(await isAuthed(Astro.cookies))) {
+  return Astro.redirect("/admin/login");
+}
+
+const posts = await listPosts();
+---
+
+<AdminLayout>
+  <div class="mx-auto max-w-6xl">
+    <header class="mb-6">
+      <h1 class="text-xl font-extrabold">封面工作台</h1>
+      <p class="mt-1 text-sm text-foreground/50">
+        选一篇文章 → 调参数 → 一键生成封面 → 存为默认封面。生成的是 SVG，直接由
+        <code class="rounded bg-muted/20 px-1 font-firacode text-xs">/api/cover/&lt;slug&gt;</code> 提供，不需要图床。
+      </p>
+    </header>
+
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+      <!-- ── 参数面板 ── -->
+      <form
+        id="cover-form"
+        class="h-fit space-y-4 rounded-2xl border border-border/60 bg-card/60 p-5"
+      >
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-semibold text-foreground/60">文章</span>
+          <select id="c-slug" name="slug" class="w-full rounded-lg border border-border/25 bg-background px-3 py-2 text-sm outline-none focus:border-accent/50">
+            <option value="">— 请选择 —</option>
+            {posts.map((p) => <option value={p.slug}>{p.title}（{p.slug}）</option>)}
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-semibold text-foreground/60">主标题</span>
+          <input id="c-title" class="w-full rounded-lg border border-border/25 bg-background px-3 py-2 text-sm outline-none focus:border-accent/50" placeholder="留空则使用文章标题" />
+        </label>
+
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-semibold text-foreground/60">副标题</span>
+          <input id="c-subtitle" class="w-full rounded-lg border border-border/25 bg-background px-3 py-2 text-sm outline-none focus:border-accent/50" placeholder="留空则使用文章描述开头" />
+        </label>
+
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-semibold text-foreground/60">角标（右下小字）</span>
+          <input id="c-tag" class="w-full rounded-lg border border-border/25 bg-background px-3 py-2 text-sm outline-none focus:border-accent/50" placeholder={SITE.title} />
+        </label>
+
+        <div>
+          <span class="mb-1.5 block text-xs font-semibold text-foreground/60">配色</span>
+          <div class="flex gap-2" id="c-themes" role="radiogroup" aria-label="配色">
+            <button type="button" class="theme-chip is-active" data-theme="midnight" style="--chip:#1158d1;--chip2:#0a1017" aria-label="午夜蓝"></button>
+            <button type="button" class="theme-chip" data-theme="aurora" style="--chip:#2f9e6e;--chip2:#0b1a14" aria-label="极光绿"></button>
+            <button type="button" class="theme-chip" data-theme="sunset" style="--chip:#e0563f;--chip2:#17101a" aria-label="暮色橙"></button>
+            <button type="button" class="theme-chip" data-theme="ink" style="--chip:#7c8ba1;--chip2:#eef1f7" aria-label="宣纸灰"></button>
+          </div>
+        </div>
+
+        <label class="flex items-center gap-2 text-xs text-foreground/60">
+          <input id="c-deco" type="checkbox" checked class="accent-accent" />
+          装饰（波形 + 光斑）
+        </label>
+
+        <div class="flex flex-wrap gap-2 pt-1">
+          <button
+            id="c-preview"
+            type="button"
+            class="cursor-pointer rounded-full bg-accent/90 px-4 py-1.5 text-xs font-medium text-background transition-colors hover:bg-accent"
+          >
+            生成预览
+          </button>
+          <button
+            id="c-save"
+            type="button"
+            class="cursor-pointer rounded-full border border-border px-4 py-1.5 text-xs font-medium transition-colors hover:border-accent/40 hover:text-accent"
+          >
+            存为本文封面
+          </button>
+          <button
+            id="c-svg"
+            type="button"
+            class="cursor-pointer rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-accent/40 hover:text-accent"
+          >
+            下载 SVG
+          </button>
+          <button
+            id="c-png"
+            type="button"
+            class="cursor-pointer rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-accent/40 hover:text-accent"
+          >
+            下载 PNG
+          </button>
+          <button
+            id="c-clear"
+            type="button"
+            class="cursor-pointer rounded-full border border-transparent px-3 py-1.5 text-xs text-red-500/80 transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-500"
+          >
+            清除封面
+          </button>
+        </div>
+
+        <p id="c-status" class="hidden text-xs leading-relaxed"></p>
+      </form>
+
+      <!-- ── 预览 ── -->
+      <div class="space-y-3">
+        <div
+          id="c-preview-box"
+          class="flex aspect-video w-full items-center justify-center overflow-hidden rounded-2xl border border-border/40 bg-muted/10 text-xs text-foreground/35"
+          style="aspect-ratio: 1200 / 675"
+        >
+          调整左侧参数后点「生成预览」
+        </div>
+        <p class="text-[11px] text-foreground/35">
+          预览即最终效果（1200×675，16:9）。保存后需等一次重新部署，前台文章页才会换图。
+        </p>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .theme-chip {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background: linear-gradient(135deg, var(--chip) 0%, var(--chip2) 100%);
+    box-shadow: inset 0 1px rgb(255 255 255 / 25%);
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+    padding: 0;
+  }
+  .theme-chip:hover {
+    transform: scale(1.08);
+  }
+  .theme-chip.is-active {
+    border-color: var(--accent);
+    transform: scale(1.08);
+  }
+</style>
+
+<script>
+  interface CoverPost {
+    slug: string;
+    title: string;
+    description: string;
+  }
+
+  const THEMES: Record<string, { bg: string[]; glow: string; accent: string; fg: string; sub: string }> = {
+    midnight: {
+      bg: ["#0f1720", "#123050", "#0a1017"],
+      glow: "#1158d1",
+      accent: "#f6f7f8",
+      fg: "#f6f7f8",
+      sub: "#9fb4c9",
+    },
+    aurora: {
+      bg: ["#08150f", "#0f3a2a", "#08150f"],
+      glow: "#2f9e6e",
+      accent: "#eafff5",
+      fg: "#eafff5",
+      sub: "#8fc7ad",
+    },
+    sunset: {
+      bg: ["#1a0f18", "#4a2036", "#150d13"],
+      glow: "#e0563f",
+      accent: "#fff4ec",
+      fg: "#fff4ec",
+      sub: "#d7a492",
+    },
+    ink: {
+      bg: ["#f4f6fb", "#e2e8f2", "#f4f6fb"],
+      glow: "#7c8ba1",
+      accent: "#1b2230",
+      fg: "#1b2230",
+      sub: "#5d6b80",
+    },
+  };
+
+  function esc(s: string): string {
+    return String(s ?? "").replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
+    );
+  }
+
+  /** 把长标题折成最多两行（按视觉宽度约 22 个西文字符 / 11 个中文） */
+  function wrap(text: string, max = 20): string[] {
+    const s = String(text ?? "").trim();
+    if (!s) return [""];
+    if (s.length <= max) return [s];
+    const cut = s.slice(0, max);
+    // 尽量在标点/空格处断开
+    const idx = Math.max(
+      cut.lastIndexOf("，"),
+      cut.lastIndexOf("。"),
+      cut.lastIndexOf(" "),
+      cut.lastIndexOf("、"),
+      cut.lastIndexOf("，".slice(0, 1)),
+    );
+    if (idx > max * 0.45) return [cut.slice(0, idx + 1), s.slice(idx + 1).trim()];
+    return [cut, s.slice(max).trim()];
+  }
+
+  function buildCover(opts: {
+    title: string;
+    subtitle: string;
+    tag: string;
+    theme: string;
+    deco: boolean;
+  }): string {
+    const t = THEMES[opts.theme] ?? THEMES.midnight;
+    const lines = wrap(opts.title, 18);
+    const titleSize = lines.length > 1 ? 58 : 68;
+    const titleJsx = lines
+      .map(
+        (ln, i) =>
+          `<text x="88" y="${310 + i * (titleSize + 6)}" font-size="${titleSize}" font-weight="700" fill="${t.fg}">${esc(ln)}</text>`,
+      )
+      .join("");
+    const sub = wrap(opts.subtitle, 26)[0];
+    const deco = opts.deco
+      ? `<path d="M0 470 Q 300 402 600 470 T 1200 470 L1200 675 L0 675 Z" fill="${t.glow}" opacity=".18"/>
+         <circle cx="1046" cy="150" r="46" fill="${t.glow}" opacity=".14"/>`
+      : "";
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-label="${esc(opts.title)}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${t.bg[0]}"/>
+      <stop offset="55%" stop-color="${t.bg[1]}"/>
+      <stop offset="100%" stop-color="${t.bg[2]}"/>
+    </linearGradient>
+    <radialGradient id="g1" cx="18%" cy="22%" r="54%">
+      <stop offset="0%" stop-color="${t.glow}" stop-opacity=".55"/>
+      <stop offset="100%" stop-color="${t.glow}" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g2" cx="88%" cy="86%" r="56%">
+      <stop offset="0%" stop-color="${t.accent}" stop-opacity=".2"/>
+      <stop offset="100%" stop-color="${t.accent}" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <rect width="1200" height="675" fill="url(#g1)"/>
+  <rect width="1200" height="675" fill="url(#g2)"/>
+  ${deco}
+  <g font-family="system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif">
+    ${titleJsx}
+    <text x="90" y="418" font-size="26" font-weight="500" fill="${t.sub}">${esc(sub)}</text>
+    <text x="1160" y="622" font-size="22" font-weight="600" fill="${t.sub}" text-anchor="end" letter-spacing="2">${esc(opts.tag)}</text>
+  </g>
+</svg>`;
+  }
+
+  const box = document.getElementById("c-preview-box") as HTMLElement | null;
+  const slugEl = document.getElementById("c-slug") as HTMLSelectElement | null;
+  const titleEl = document.getElementById("c-title") as HTMLInputElement | null;
+  const subEl = document.getElementById("c-subtitle") as HTMLInputElement | null;
+  const tagEl = document.getElementById("c-tag") as HTMLInputElement | null;
+  const decoEl = document.getElementById("c-deco") as HTMLInputElement | null;
+  const statusEl = document.getElementById("c-status") as HTMLElement | null;
+  const themeBtns = [...document.querySelectorAll(".theme-chip")] as HTMLButtonElement[];
+
+  let theme = "midnight";
+  let currentSvg = "";
+
+  function say(text: string, ok = true) {
+    if (!statusEl) return;
+    statusEl.hidden = !text;
+    statusEl.textContent = text;
+    statusEl.style.color = ok ? "var(--accent)" : "var(--color-red-500, #ef4444)";
+  }
+
+  function currentOpts() {
+    return {
+      title: (titleEl?.value ?? "").trim(),
+      subtitle: (subEl?.value ?? "").trim(),
+      tag: (tagEl?.value ?? "").trim(),
+      theme,
+      deco: Boolean(decoEl?.checked),
+    };
+  }
+
+  function render() {
+    if (!box) return;
+    currentSvg = buildCover(currentOpts());
+    box.innerHTML = currentSvg;
+  }
+
+  themeBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      themeBtns.forEach(b => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+      theme = btn.dataset.theme ?? "midnight";
+      render();
+    });
+  });
+  decoEl?.addEventListener("change", render);
+
+  /** 选文章后自动带出标题/副标题 */
+  slugEl?.addEventListener("change", async () => {
+    const slug = slugEl.value;
+    say("读取文章信息…");
+    try {
+      const res = await fetch(`/api/admin/cover?slug=${encodeURIComponent(slug)}`);
+      const j = await res.json();
+      if (res.status === 401) {
+        location.href = "/admin/login";
+        return;
+      }
+      if (titleEl) titleEl.value = j.title ?? "";
+      if (subEl) subEl.value = String(j.description ?? "").slice(0, 60);
+      render();
+      say("");
+    } catch {
+      say("读取失败，可手工填标题");
+    }
+  });
+
+  document.getElementById("c-preview")?.addEventListener("click", render);
+
+  async function save() {
+    const slug = slugEl?.value ?? "";
+    if (!slug) return say("先选一篇要设置封面的文章", false);
+    if (!currentSvg) render();
+    say("保存并触发重新部署…");
+    try {
+      const res = await fetch("/api/admin/cover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, svg: currentSvg }),
+      });
+      const j = await res.json();
+      if (res.status === 401) return void (location.href = "/admin/login");
+      say(
+        j.ok
+          ? `已保存（${j.coverImage ?? ""}），会自动触发重新部署，约 1 分钟后前台生效。`
+          : `失败：${j.message ?? "未知错误"}`,
+        Boolean(j.ok),
+      );
+    } catch {
+      say("保存失败（网络错误）", false);
+    }
+  }
+  document.getElementById("c-save")?.addEventListener("click", save);
+
+  document.getElementById("c-svg")?.addEventListener("click", () => {
+    if (!currentSvg) render();
+    const blob = new Blob([currentSvg], { type: "image/svg+xml" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `cover-${slugEl?.value ?? "preview"}.svg`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+
+  document.getElementById("c-png")?.addEventListener("click", async () => {
+    if (!currentSvg) render();
+    if (!currentSvg) return say("先生成预览", false);
+    say("正在渲染 PNG…");
+    try {
+      const img = new Image();
+      img.width = 1200;
+      img.height = 675;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("渲染失败"));
+        img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(currentSvg)}`;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = 1200;
+      canvas.height = 675;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return say("当前浏览器不支持导出", false);
+      ctx.drawImage(img, 0, 0, 1200, 675);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `cover-${slugEl?.value ?? "preview"}.png`;
+      a.click();
+      say("PNG 已导出");
+    } catch {
+      say("PNG 导出失败，可改用「下载 SVG」", false);
+    }
+  });
+
+  document.getElementById("c-clear")?.addEventListener("click", async () => {
+    const slug = slugEl?.value ?? "";
+    if (!slug) return say("先选一篇文章", false);
+    if (!confirm("确定清除这篇文章的封面吗？")) return;
+    say("清除中…");
+    try {
+      const res = await fetch(`/api/admin/cover?slug=${encodeURIComponent(slug)}`, {
+        method: "DELETE",
+      });
+      const j = await res.json();
+      if (res.status === 401) return void (location.href = "/admin/login");
+      say(j.ok ? "已清除（前台会回落到默认封面）" : `失败：${j.message ?? "未知错误"}`);
+    } catch {
+      say("清除失败（网络错误）", false);
+    }
+  });
+</script>

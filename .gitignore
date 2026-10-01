@@ -18,10 +18,11 @@ node_modules.bak/
 # temporary esbuild / verification output
 tmp-esbuild-out/
 
-# AI summary runtime state (kept in KV on Vercel; local copy is dev-only)
+# runtime state (kept in KV on Vercel; local copy is dev-only)
 src/data/admin/aiSummary.json
 src/data/admin/aiUsage.json
 src/data/admin/deployHook.json
+src/data/admin/covers.json
 
 # logs
 npm-debug.log*

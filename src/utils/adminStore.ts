@@ -88,6 +88,9 @@ function buildFrontmatter(fm: Record<string, unknown>): string {
     Array.isArray(fm.tags) && fm.tags.length ? fm.tags.map(String) : ["others"];
   lines.push("tags:");
   for (const tag of tags) lines.push(`  - ${JSON.stringify(tag)}`);
+  // 文章封面：外链地址或 /api/cover/<slug>（由「封面工作台」生成的 SVG）
+  const cover = String(fm.coverImage ?? "").trim();
+  if (cover) lines.push(`coverImage: ${JSON.stringify(cover)}`);
   lines.push(`featured: ${Boolean(fm.featured)}`);
   lines.push(`draft: ${Boolean(fm.draft)}`);
   lines.push("---");
@@ -209,6 +212,7 @@ export async function savePost(input: {
   featured: boolean;
   draft: boolean;
   content: string;
+  coverImage?: string | null;
 }): Promise<{ slug: string }> {
   const slug = safeSlug(input.slug);
   if (!slug) throw new Error("slug 无效：只能包含字母、数字和连字符");
@@ -222,6 +226,7 @@ export async function savePost(input: {
     modDatetime: input.modDatetime || new Date().toISOString(),
     featured: input.featured,
     draft: input.draft,
+    coverImage: String(input.coverImage ?? "").trim(),
   };
   const file = path.join(BLOG_DIR, `${slug}.md`);
   const body = `${buildFrontmatter(fm)}\n\n${input.content.replace(/\r\n/g, "\n").trim()}\n`;

@@ -2,6 +2,8 @@ export const prerender = false;
 
 import { getCurrentUser } from "@/utils/userAuth";
 import { addComment, listComments } from "@/utils/userStore";
+import { clientIp, lookupRegion } from "@/utils/geo";
+import { SITE } from "@/config";
 
 /** GET /api/comments?slug=... — public list (newest first). */
 export async function GET({ url }: { url: URL }) {
@@ -30,6 +32,12 @@ export async function POST({ request, cookies }: { request: Request; cookies: an
     return Response.json({ ok: false, error: "缺少文章或评论内容" }, { status: 400 });
   }
 
-  const comment = await addComment(slug, user.id, user.name, content);
+  // IP 属地：查不到就空着，评论照常保存（不阻塞）
+  const ip = clientIp(request.headers);
+  const region = ip ? await lookupRegion(ip) : "";
+  const ownerEmail = String((SITE as { commentOwnerEmail?: string }).commentOwnerEmail ?? "").trim();
+  const isOwner = Boolean(ownerEmail) && user.email.toLowerCase() === ownerEmail.toLowerCase();
+
+  const comment = await addComment(slug, user.id, user.name, content, { region, isOwner });
   return Response.json({ ok: true, comment });
 }

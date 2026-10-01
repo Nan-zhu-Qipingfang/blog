@@ -63,6 +63,15 @@ const ogImage = ogImageUrl
   ? new URL(ogImageUrl, Astro.url.origin).href
   : undefined;
 
+// ── 文章封面（frontmatter coverImage：本地资源 / 外链 / /api/cover/<slug> 三选一） ──
+const rawCover = (post.data as { coverImage?: unknown }).coverImage;
+let coverSrc: string | undefined;
+if (typeof rawCover === "string" && rawCover.trim()) {
+  coverSrc = rawCover.trim();
+} else if (rawCover && typeof rawCover === "object" && "src" in rawCover) {
+  coverSrc = String((rawCover as { src: unknown }).src);
+}
+
 const layoutProps = {
   title: `${title} | ${SITE.title}`,
   author,
@@ -223,6 +232,15 @@ const relatedPosts = posts
 
     <!-- ═══════ AI summary ═══════ -->
     <AiSummary summary={summary || description} />
+
+    <!-- ═══════ 文章封面（对标参考站：顶圆角 + 底部渐隐的"窗口"） ═══════ -->
+    {
+      coverSrc && (
+        <div class="post-cover-image" data-no-lightbox>
+          <img src={coverSrc} alt={`${title} 封面图`} loading="eager" decoding="async" />
+        </div>
+      )
+    }
 
     <!-- ═══════ Table of contents ═══════ -->
     <PostToc />
@@ -504,6 +522,42 @@ const relatedPosts = posts
     pointer-events: none;
     z-index: 0;
     border-radius: 1.5rem; /* matches rounded-3xl */
+  }
+
+  /* ── 文章封面带：仿参考站的上圆角 + 底部渐隐遮罩 ──
+     参考站（.post-cover-image）：5px 描边只留左右上三面、底边不描边，
+     再用 mask-image 把下半部分渐变透明，让封面像"融进"正文里。 */
+  .post-cover-image {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    height: 10rem;
+    border: 4px solid color-mix(in srgb, var(--border) 28%, transparent);
+    border-bottom: none;
+    border-radius: 1rem 1rem 0 0;
+    -webkit-mask-image: linear-gradient(#000 0% 38%, #0000 100%);
+    mask-image: linear-gradient(#000 0% 38%, #0000 100%);
+  }
+  .post-cover-image img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    object-fit: cover;
+    object-position: center;
+  }
+  @media (width >= 640px) {
+    .post-cover-image {
+      height: 12rem;
+    }
+  }
+  @media (width >= 1024px) {
+    .post-cover-image {
+      height: 13rem;
+    }
   }
 
   .post-nav-link {

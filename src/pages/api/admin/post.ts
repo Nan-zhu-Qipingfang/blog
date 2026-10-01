@@ -55,6 +55,7 @@ export const POST: APIRoute = async Astro => {
       featured: Boolean(body.featured),
       draft: Boolean(body.draft),
       content,
+      coverImage: body.coverImage == null ? null : String(body.coverImage).trim(),
     });
     await appendLog(isNew ? "新建文章" : "更新文章", `${title}（${slug}）`);
     const deploy = await triggerRedeploy();

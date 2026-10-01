@@ -1,11 +1,17 @@
 ---
 /**
- * Comments — article comment section with site-user login/register.
+ * Comments — article comment section.
+ *
+ * 对标参考站：昵称旁挂「称号 / 置顶」徽章，正文下面显示 IP 属地与评论系统署名，
+ * 输入框支持 emoji 一键插入。
  */
+import { SITE } from "@/config";
+
 const slug = Astro.url.pathname.replace(/^\/posts\//, "").replace(/\/$/, "") || "home";
+const systemName = String((SITE as { commentSystemName?: string }).commentSystemName ?? "评论系统");
 ---
 
-<section id="comments" class="comments mt-10" data-slug={slug}>
+<section id="comments" class="comments mt-10" data-slug={slug} data-system={systemName}>
   <div class="comments-card">
     <div class="comments-head">
       <h2 class="comments-title">评 论</h2>
@@ -42,6 +48,21 @@ const slug = Astro.url.pathname.replace(/^\/posts\//, "").replace(/\/$/, "") || 
           <span>以 <strong data-user-name></strong> 身份评论</span>
           <button type="button" class="link-quit" data-logout>退出</button>
         </p>
+
+        <div class="emoji-bar">
+          <button
+            type="button"
+            class="emoji-toggle"
+            data-emoji-toggle
+            aria-label="插入表情"
+            title="插入表情"
+            aria-expanded="false">☺</button
+          >
+          <div class="emoji-panel" data-emoji-panel hidden role="dialog" aria-label="表情面板">
+            <div class="emoji-grid" data-emoji-grid></div>
+          </div>
+        </div>
+
         <textarea
           class="composer-input"
           data-composer-input
@@ -63,6 +84,17 @@ const slug = Astro.url.pathname.replace(/^\/posts\//, "").replace(/\/$/, "") || 
 </section>
 
 <script>
+  const EMOJI = [
+    "😀","😃","😄","😁","😆","😅","🤣","😂","🙂","🙃",
+    "😉","😊","😇","🥰","😍","🤩","😘","😗","😚","😙",
+    "😋","😛","😜","🤪","🤨","🧐","🤓","😎","🥳","😏",
+    "😒","😞","😔","😟","😕","🙁","😣","😖","😫","😩",
+    "😢","😭","😤","😠","😡","🤬","😳","🥺","😦","😧",
+    "👍","👎","👌","✌️","🤞","🤝","🙏","👏","🙌","💪",
+    "❤️","💔","💕","💖","✨","🌟","⭐","🔥","🎉","🎊",
+    "🌈","☀️","🌙","🍀","🍁","🐱","🐶","🦊","🐼","🐳",
+  ];
+
   function initComments() {
     const root = document.getElementById("comments");
     if (!root) return;
@@ -76,6 +108,8 @@ const slug = Astro.url.pathname.replace(/^\/posts\//, "").replace(/\/$/, "") || 
     const avatarEl = root.querySelector("[data-user-avatar]") as HTMLElement;
     const errEls = [...root.querySelectorAll("[data-auth-error]")] as HTMLElement[];
 
+    const systemName = root.dataset.system || "评论系统";
+
     let user: { id: string; name: string; email: string } | null = null;
 
     const esc = (s: string) =>
@@ -85,6 +119,7 @@ const slug = Astro.url.pathname.replace(/^\/posts\//, "").replace(/\/$/, "") || 
 
     function timeAgo(iso: string): string {
       const d = new Date(iso).getTime();
+      if (Number.isNaN(d)) return "";
       const diff = Date.now() - d;
       const m = Math.floor(diff / 60000);
       if (m < 1) return "刚刚";
@@ -100,25 +135,102 @@ const slug = Astro.url.pathname.replace(/^\/posts\//, "").replace(/\/$/, "") || 
       try {
         const res = await fetch(`/api/comments?slug=${encodeURIComponent(slug)}`);
         const j = await res.json();
-        const comments = j.comments ?? [];
+        const comments: any[] = j.comments ?? [];
         countEl.textContent = String(comments.length);
         empty.hidden = comments.length > 0;
+
+        // 先按时间算出「沙发 / 板凳」的座位，置顶不会把座位挤掉
+        const seats = new Map<string, number>();
+        comments
+          .slice()
+          .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+          .slice(0, 2)
+          .forEach((c, i) => seats.set(String(c.id), i));
+
         list.innerHTML = comments
-          .map(
-            (c: any) => `
-            <li class="comment-item">
-              <span class="comment-avatar">${esc((c.name || "?")[0].toUpperCase())}</span>
-              <div class="comment-body">
-                <div class="comment-meta"><strong>${esc(c.name)}</strong><time>${timeAgo(c.createdAt)}</time></div>
-                <p class="comment-text">${esc(c.content)}</p>
+          .map((c: any) => {
+            const badges: string[] = [];
+            if (c.pinned) badges.push('<span class="cm-badge cm-badge-pin">置顶</span>');
+            if (c.isOwner) badges.push('<span class="cm-badge cm-badge-owner">站长</span>');
+            else if (c.badge) badges.push(`<span class="cm-badge">${esc(String(c.badge))}</span>`);
+            const seat = seats.get(String(c.id));
+            if (!c.pinned && !c.isOwner && !c.badge && seat === 0)
+              badges.push('<span class="cm-badge cm-badge-seat">沙发</span>');
+            if (!c.pinned && !c.isOwner && !c.badge && seat === 1)
+              badges.push('<span class="cm-badge cm-badge-seat">板凳</span>');
+
+            const region = c.region ? esc(String(c.region)) : "";
+            const head = region
+              ? `<span class="cm-foot-item cm-region">📍 ${region}</span><span class="cm-foot-sep">·</span>`
+              : "";
+
+            return `
+            <li class="cm-item${c.pinned ? " is-pinned" : ""}" data-id="${esc(String(c.id))}">
+              <span class="cm-avatar">${esc((c.name || "?")[0].toUpperCase())}</span>
+              <div class="cm-body">
+                <div class="cm-meta">
+                  <strong class="cm-name">${esc(String(c.name))}</strong>
+                  ${badges.join("")}
+                  <time class="cm-time">${timeAgo(String(c.createdAt))}</time>
+                </div>
+                <p class="cm-text">${esc(String(c.content))}</p>
+                <div class="cm-foot">
+                  ${head}<span class="cm-foot-item">由 ${esc(systemName)} 驱动</span><span class="cm-foot-sep">·</span><span class="cm-foot-item">${esc(String(c.id).slice(0, 8))}</span>
+                </div>
               </div>
-            </li>`,
-          )
+            </li>`;
+          })
           .join("");
       } catch {
         /* offline */
       }
     }
+
+    /* ── emoji 面板 ───────────────────────────────────── */
+    const input = root.querySelector("[data-composer-input]") as HTMLTextAreaElement | null;
+    const panel = root.querySelector("[data-emoji-panel]") as HTMLElement | null;
+    const grid = root.querySelector("[data-emoji-grid]") as HTMLElement | null;
+    const toggle = root.querySelector("[data-emoji-toggle]") as HTMLButtonElement | null;
+
+    if (grid && !grid.childElementCount) {
+      for (const e of EMOJI) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "emoji-cell";
+        b.textContent = e;
+        b.addEventListener("click", () => {
+          insertAtCursor(e);
+          panel!.hidden = true;
+          toggle!.setAttribute("aria-expanded", "false");
+        });
+        grid.appendChild(b);
+      }
+    }
+
+    function insertAtCursor(ch: string) {
+      if (!input) return;
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      input.value = input.value.slice(0, start) + ch + input.value.slice(end);
+      const pos = start + ch.length;
+      input.setSelectionRange(pos, pos);
+      input.focus();
+    }
+
+    toggle?.addEventListener("click", () => {
+      if (!panel) return;
+      const willOpen = panel.hidden;
+      panel.hidden = !willOpen;
+      toggle.setAttribute("aria-expanded", String(willOpen));
+    });
+    document.addEventListener("click", ev => {
+      if (!panel || !toggle) return;
+      const t = ev.target as Node;
+      if (!panel.contains(t) && !toggle.contains(t)) {
+        panel.hidden = true;
+        toggle.setAttribute("aria-expanded", "false");
+      }
+    });
 
     function setUser(u: { name: string } | null) {
       user = u;
@@ -188,7 +300,7 @@ const slug = Astro.url.pathname.replace(/^\/posts\//, "").replace(/\/$/, "") || 
     });
 
     async function send() {
-      const input = root.querySelector("[data-composer-input]") as HTMLTextAreaElement;
+      if (!input) return;
       const content = input.value.trim();
       if (!content || !user) return;
       const res = await fetch("/api/comments", {
@@ -203,7 +315,7 @@ const slug = Astro.url.pathname.replace(/^\/posts\//, "").replace(/\/$/, "") || 
     }
 
     root.querySelector("[data-send]")?.addEventListener("click", send);
-    root.querySelector("[data-composer-input]")?.addEventListener("keydown", e => {
+    input?.addEventListener("keydown", e => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") send();
     });
 
@@ -278,30 +390,80 @@ const slug = Astro.url.pathname.replace(/^\/posts\//, "").replace(/\/$/, "") || 
   .composer-send {
     @apply rounded-full bg-accent/90 px-4 py-1.5 text-xs font-medium text-background transition-colors hover:bg-accent;
   }
+
+  /* ── emoji ── */
+  .emoji-bar {
+    @apply relative mb-2;
+  }
+  .emoji-toggle {
+    @apply flex size-8 items-center justify-center rounded-lg border border-border/25 bg-background text-base leading-none text-foreground/55 transition-colors hover:border-accent/40 hover:text-accent;
+  }
+  .emoji-panel {
+    @apply absolute left-0 top-10 z-20 w-[16.5rem] rounded-xl border border-border/30 bg-background/95 p-2 shadow-lg backdrop-blur-xl;
+  }
+  .emoji-grid {
+    @apply grid grid-cols-8 gap-0.5;
+  }
+  .emoji-cell {
+    @apply flex size-7 items-center justify-center rounded-md text-base leading-none transition-transform hover:scale-115 hover:bg-accent/10;
+  }
+
+  /* ── 评论列表 ── */
   .comment-list {
     @apply mt-5 flex list-none flex-col gap-4 p-0;
   }
-  .comment-item {
-    @apply flex gap-3;
+  .cm-item {
+    @apply flex gap-3 rounded-xl px-1 py-1 transition-colors;
   }
-  .comment-avatar {
+  .cm-item.is-pinned {
+    @apply border border-accent/20 bg-accent/[0.05];
+  }
+  .cm-avatar {
     @apply inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/80 text-xs font-bold text-background;
   }
-  .comment-body {
+  .cm-item.is-pinned .cm-avatar {
+    @apply bg-accent;
+  }
+  .cm-body {
     @apply min-w-0 flex-1;
   }
-  .comment-meta {
-    @apply flex items-center gap-2 text-xs;
+  .cm-meta {
+    @apply flex flex-wrap items-center gap-x-2 gap-y-1 text-xs;
   }
-  .comment-meta strong {
+  .cm-name {
     @apply text-foreground/85;
   }
-  .comment-meta time {
+  .cm-time {
     @apply text-foreground/35;
   }
-  .comment-text {
-    @apply mt-1 text-sm leading-relaxed break-words text-foreground/80;
+
+  .cm-badge {
+    @apply inline-flex items-center rounded-md bg-muted/40 px-1.5 py-px text-[10px] font-semibold leading-tight text-foreground/55;
   }
+  .cm-badge-pin {
+    @apply bg-accent/15 text-accent;
+  }
+  .cm-badge-owner {
+    @apply bg-accent text-background;
+  }
+  .cm-badge-seat {
+    @apply bg-muted/40 text-foreground/45;
+  }
+
+  .cm-text {
+    @apply mt-1 text-sm leading-relaxed break-words whitespace-pre-wrap text-foreground/80;
+  }
+
+  .cm-foot {
+    @apply mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-foreground/30;
+  }
+  .cm-region {
+    @apply text-foreground/45;
+  }
+  .cm-foot-sep {
+    @apply opacity-50;
+  }
+
   .comment-empty {
     @apply mt-5 text-center text-xs text-foreground/40;
   }

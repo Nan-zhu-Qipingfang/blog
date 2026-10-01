@@ -31,6 +31,17 @@ export const SITE = {
     url: process.env.PUBLIC_EDIT_POST_URL ?? "", // set in .env
   },
   dynamicOgImage: true,
+  // 评论区的 IP 属地：保存评论时按 x-forwarded-for 查一次免费接口，
+  // 取不到就留空（前端不显示地区）。国内直连 freeipapi 成功率较高，
+  // 失败会依次退回 ipapi.co / ipinfo.io，都失败就整体降级为空。
+  commentRegion: {
+    enabled: true,
+    detail: "city", // "city" | "region" | "country" —— 显示到哪一级（越细越准但也越"暴露"）
+  },
+  // 评论区底部署名（对标参考站的「由 XX 驱动」）
+  commentSystemName: "七平方评论",
+  // 填自己的邮箱后，该邮箱发的评论自动挂「站长」称号（留空则不自动标记）
+  commentOwnerEmail: "",
   dir: "ltr", // "rtl" | "auto"
   lang: "zh-CN", // html lang code. Set this empty and default will be "en"
   timezone: "Asia/Shanghai", // Default global timezone (IANA format) https://en.wikipedia.org/wiki/List_of_tz_database_time_zones

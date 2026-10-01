@@ -13,6 +13,7 @@ import {
 } from "@shikijs/transformers";
 import { transformerFileName } from "./src/utils/transformers/fileName";
 import { rehypeTerminalCodeBlock } from "./src/utils/rehype/terminalCodeBlock.js";
+import rehypeHighlightMarks from "./src/utils/rehype/highlightMarks.js";
 import remarkAnzhiyuTags from "./src/plugins/remark-anzhiyu-tags";
 import { SITE } from "./src/config";
 
@@ -46,7 +47,7 @@ export default defineConfig({
       // 安知鱼（hexo-theme-anzhiyu）外挂标签：audio / video / videos / tip / hide*
       remarkAnzhiyuTags,
     ],
-    rehypePlugins: [rehypeTerminalCodeBlock],
+    rehypePlugins: [rehypeTerminalCodeBlock, rehypeHighlightMarks],
     shikiConfig: {
       // For more themes, visit https://shiki.style/themes
       themes: { light: "min-light", dark: "github-dark-default" },

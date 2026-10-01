@@ -1,33 +1,51 @@
 ---
 /**
- * AI summary card with typewriter playback, shown above the article body.
- * Content comes from the post's frontmatter description; the typewriter
- * effect gives the "AI generating" feel without any external API.
+ * AI summary card — iOS / macOS window style (对标参考站 ai-summary-card).
+ *
+ * Structure mirrors the reference layout:
+ *   .ai-summary-card
+ *     └ .ai-summary-glow      (blurred colour halo behind the surface)
+ *       └ .ai-summary-surface (frosted panel with traffic-light head)
+ *           ├ .ai-summary-head    (red / yellow / green dots + actions)
+ *           ├ .ai-summary-text    (typewriter output + blinking caret)
+ *           └ .ai-summary-footer  (wand brand + model badge)
  */
 export interface Props {
   summary?: string;
 }
 const { summary } = Astro.props;
 const text = (summary ?? "").trim();
+const brand = "七平方AI";
 ---
 
 {
   text && (
-    <div
+    <section
       id="ai-summary"
+      class="ai-summary-card mx-auto mt-8 w-full max-w-app"
       data-pagefind-ignore
-      class="glass-specular relative mx-auto mt-8 w-full max-w-app overflow-hidden rounded-[var(--radius-card)] border border-accent/15 bg-accent/[0.045] p-5 sm:p-6 backdrop-blur-xl"
+      aria-label="AI 摘要"
     >
-      <!-- decorative corner glow -->
-      <div
-        class="pointer-events-none absolute -top-16 -right-16 size-40 rounded-full bg-accent/10 blur-3xl"
-        aria-hidden="true"
-      />
+      {/* 背后的彩色光晕 */}
+      <div class="ai-summary-glow" aria-hidden="true"></div>
 
-      <div class="relative mb-3 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <span
-            class="ai-icon flex size-7 items-center justify-center rounded-lg bg-accent/10 text-accent"
+      <div class="ai-summary-surface">
+        {/* 标题栏：macOS 三色点 */}
+        <div class="ai-summary-head">
+          <span class="ai-summary-dot ai-summary-dot-red" aria-hidden="true"></span>
+          <span class="ai-summary-dot ai-summary-dot-yellow" aria-hidden="true"></span>
+          <span class="ai-summary-dot ai-summary-dot-green" aria-hidden="true"></span>
+
+          <span class="ai-summary-status" data-ai-status>
+            已生成
+          </span>
+
+          <button
+            type="button"
+            id="ai-refresh"
+            class="ai-summary-action"
+            title="重看一遍（不重复调用接口）"
+            aria-label="重新播放摘要动画"
           >
             <svg
               class="size-4"
@@ -39,226 +57,296 @@ const text = (summary ?? "").trim();
               stroke-linejoin="round"
               aria-hidden="true"
             >
-              <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z" />
-              <path d="M5 3v4M19 17v4M3 5h4M17 19h4" />
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
             </svg>
-          </span>
-          <span class="ai-title text-sm font-semibold tracking-wide">AI 摘要</span>
-          <span
-            class="ai-status font-firacode rounded-full border border-accent/20 bg-accent/5 px-2 py-0.5 text-[11px] text-accent/80"
-            data-ai-status
-          >
-            已生成<span class="ai-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          </span>
+          </button>
         </div>
 
-        <button
-          type="button"
-          id="ai-refresh"
-          class="flex size-8 cursor-pointer items-center justify-center rounded-lg text-foreground/40 transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
-          aria-label="重新生成摘要"
-          title="重新生成"
-        >
-          <svg
-            class="size-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-            <path d="M21 3v6h-6" />
-          </svg>
-        </button>
+        {/* 摘要正文：打字机 */}
+        <p
+          class="ai-summary-text"
+          data-ai-text
+          data-full={text}
+        />
+
+        {/* 页脚：品牌 + 模型 */}
+        <div class="ai-summary-footer">
+          <span class="ai-summary-brand">
+            <svg
+              class="ai-summary-brand-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m14.5 3.5 1.2 3.1 3.1 1.2-3.1 1.2-1.2 3.1-1.2-3.1L10.2 7.8l3.1-1.2z" />
+              <path d="M4.8 13.4l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />
+              <path d="M14.6 16.2l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6z" />
+            </svg>
+            <span>AI 摘要</span>
+          </span>
+          <span class="ai-summary-model">{brand}</span>
+        </div>
       </div>
-
-      <!-- shimmer divider -->
-      <div class="ai-shimmer relative mb-3 h-px" aria-hidden="true"></div>
-
-      <p
-        class="relative min-h-[3.5rem] text-[0.925rem] leading-relaxed text-foreground/75"
-        data-ai-text
-        data-full={text}
-      />
-
-      <p class="mt-3 border-t border-border/10 pt-2.5 text-[11px] text-foreground/35">
-        本摘要在后台保存文章时生成，内容基于全文 · 右上角可重看一遍（不重复调用接口）
-      </p>
-    </div>
+    </section>
   )
 }
 
 <style>
-  /* ── 流动描边：一段高光沿卡片边框缓慢旋转 ── */
-  @property --ai-angle {
-    syntax: "<angle>";
-    initial-value: 0deg;
-    inherits: false;
+  .ai-summary-card {
+    position: relative;
+    isolation: isolate;
+    --ai-radius: 1.15rem;
   }
-  #ai-summary {
-    --ai-angle: 0deg;
-  }
-  #ai-summary::before {
-    content: "";
+
+  /* ── 背景光晕 ───────────────────────────────────────── */
+  .ai-summary-glow {
+    z-index: -1;
+    background:
+      radial-gradient(
+        circle at 12% 20%,
+        color-mix(in srgb, var(--accent) 30%, transparent),
+        transparent 34%
+      ),
+      radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--muted) 45%, transparent), transparent 36%),
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--accent) 20%, transparent),
+        color-mix(in srgb, var(--muted) 20%, transparent)
+      );
+    filter: blur(15px);
+    opacity: 0.4;
+    border-radius: var(--ai-radius);
     position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: conic-gradient(
-      from var(--ai-angle),
-      transparent 0deg 40deg,
-      color-mix(in srgb, var(--accent) 70%, transparent) 90deg,
-      color-mix(in srgb, var(--accent) 12%, transparent) 150deg,
-      transparent 210deg 360deg
-    );
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    mask-composite: exclude;
-    animation: ai-border-spin 7s linear infinite;
-    pointer-events: none;
+    inset: 0.25rem;
+    transform: translateY(3px) scale(0.985);
   }
-  @keyframes ai-border-spin {
+
+  /* ── 玻璃面板 ───────────────────────────────────────── */
+  .ai-summary-surface {
+    border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--background) 92%, white 8%),
+        color-mix(in srgb, var(--background) 88%, var(--accent) 8%)
+      ),
+      radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 38%),
+      radial-gradient(circle at 94% 100%, color-mix(in srgb, var(--muted) 12%, transparent), transparent 40%);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent),
+      0 18px 44px -34px color-mix(in srgb, var(--accent) 60%, transparent);
+    border-radius: var(--ai-radius);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── 标题栏 + 三色点 ────────────────────────────────── */
+  .ai-summary-head {
+    gap: 0.45rem;
+    padding: 0.75rem 0.85rem 0.25rem;
+    display: flex;
+    align-items: center;
+  }
+
+  .ai-summary-dot {
+    border-radius: 999px;
+    width: 0.62rem;
+    height: 0.62rem;
+    box-shadow: inset 0 1px rgb(255 255 255 / 38%);
+    flex: none;
+  }
+  .ai-summary-dot-red {
+    background: #fc625d;
+  }
+  .ai-summary-dot-yellow {
+    background: #fdbc40;
+  }
+  .ai-summary-dot-green {
+    background: #35cd4b;
+  }
+
+  .ai-summary-status {
+    margin-left: 0.35rem;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    transition: opacity 0.3s ease;
+  }
+
+  .ai-summary-action {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: none;
+    border-radius: 0.6rem;
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    cursor: pointer;
+    transition:
+      color 0.2s ease,
+      background-color 0.2s ease,
+      transform 0.2s ease;
+  }
+  .ai-summary-action:hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+  }
+  .ai-summary-action:active {
+    transform: scale(0.92);
+  }
+
+  /* ── 正文 ───────────────────────────────────────────── */
+  .ai-summary-text {
+    min-height: 3.2rem;
+    color: color-mix(in srgb, var(--foreground) 85%, transparent);
+    letter-spacing: 0.01em;
+    text-align: justify;
+    margin: 0;
+    padding: 0.6rem 1rem 0.75rem;
+    font-size: 0.96rem;
+    line-height: 1.72;
+    word-break: break-word;
+  }
+  /* 打字光标 */
+  .ai-summary-text::after {
+    content: "";
+    display: inline-block;
+    vertical-align: baseline;
+    width: 0.5rem;
+    height: 0.13rem;
+    margin-left: 0.18rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 70%, transparent);
+    opacity: 0;
+  }
+  .ai-summary-text.typing::after {
+    opacity: 1;
+    width: 0.28rem;
+    height: 0.95em;
+    animation: ai-summary-cursor 1s ease-in-out infinite;
+  }
+  @keyframes ai-summary-cursor {
+    0%,
     to {
-      --ai-angle: 360deg;
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.1;
     }
   }
 
-  /* ── 打字完成时的一次性光环 ── */
-  #ai-summary.done {
+  /* ── 页脚 ───────────────────────────────────────────── */
+  .ai-summary-footer {
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    letter-spacing: 0.02em;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0 1rem 0.8rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    display: flex;
+  }
+
+  .ai-summary-brand {
+    align-items: center;
+    gap: 0.38rem;
+    min-width: 0;
+    display: inline-flex;
+  }
+  .ai-summary-brand-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+    color: color-mix(in srgb, var(--accent) 65%, transparent);
+    flex: none;
+  }
+  .ai-summary-model {
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    flex: none;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  /* ── 动画：打字完成时的一次性光环 ───────────────────── */
+  .ai-summary-card.done .ai-summary-surface {
     animation: ai-done-glow 1s ease-out;
   }
   @keyframes ai-done-glow {
     0% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 38%, transparent);
+      box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent),
+        0 18px 44px -34px color-mix(in srgb, var(--accent) 60%, transparent),
+        0 0 0 0 color-mix(in srgb, var(--accent) 38%, transparent);
     }
     100% {
-      box-shadow: 0 0 0 16px transparent;
+      box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent),
+        0 18px 44px -34px color-mix(in srgb, var(--accent) 60%, transparent),
+        0 0 0 16px transparent;
     }
   }
 
-  /* ── 图标呼吸光 ── */
-  .ai-icon {
-    animation: ai-icon-pulse 2.6s ease-in-out infinite;
+  /* 三色点的轻微呼吸 */
+  .ai-summary-card:not(.done) .ai-summary-dot {
+    animation: ai-dot-breathe 3.2s ease-in-out infinite;
   }
-  @keyframes ai-icon-pulse {
+  .ai-summary-dot-yellow {
+    animation-delay: 0.25s !important;
+  }
+  .ai-summary-dot-green {
+    animation-delay: 0.5s !important;
+  }
+  @keyframes ai-dot-breathe {
     0%,
     100% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 32%, transparent);
-    }
-    55% {
-      box-shadow: 0 0 0 6px transparent;
-    }
-  }
-
-  /* ── 渐变标题 ── */
-  .ai-title {
-    background: linear-gradient(
-      115deg,
-      var(--accent) 10%,
-      color-mix(in oklab, var(--accent) 55%, var(--foreground)) 90%
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-
-  /* ── 扫光分隔线 ── */
-  .ai-shimmer {
-    overflow: hidden;
-    background: color-mix(in srgb, var(--border) 22%, transparent);
-  }
-  .ai-shimmer::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 38%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      color-mix(in srgb, var(--accent) 75%, transparent),
-      transparent
-    );
-    animation: ai-sweep 3.4s ease-in-out infinite;
-  }
-  @keyframes ai-sweep {
-    0% {
-      transform: translateX(-130%);
-    }
-    55%,
-    100% {
-      transform: translateX(340%);
-    }
-  }
-
-  .ai-dots {
-    display: inline-flex;
-    gap: 3px;
-    margin-left: 4px;
-    vertical-align: 2px;
-  }
-  .ai-dots i {
-    width: 3px;
-    height: 3px;
-    border-radius: 999px;
-    background: currentColor;
-    opacity: 0.3;
-    animation: ai-dot 1.2s ease-in-out infinite;
-  }
-  .ai-dots i:nth-child(2) {
-    animation-delay: 0.15s;
-  }
-  .ai-dots i:nth-child(3) {
-    animation-delay: 0.3s;
-  }
-  @keyframes ai-dot {
-    0%,
-    100% {
-      opacity: 0.3;
-      transform: translateY(0);
-    }
-    40% {
       opacity: 1;
-      transform: translateY(-2px);
     }
-  }
-
-  /* blinking caret while typing */
-  [data-ai-text]::after {
-    content: "▍";
-    margin-left: 1px;
-    color: var(--color-accent);
-    opacity: 0;
-  }
-  [data-ai-text].typing::after {
-    opacity: 1;
-    animation: ai-caret 0.8s step-end infinite;
-  }
-  @keyframes ai-caret {
     50% {
-      opacity: 0.2;
+      opacity: 0.55;
     }
   }
 
-  /* 状态徽章淡入 */
-  .ai-status {
-    transition: opacity 0.3s ease;
+  /* ── 窄屏 ───────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    .ai-summary-glow {
+      filter: blur(11px);
+      inset: 0.15rem;
+    }
+    .ai-summary-head {
+      padding: 0.65rem 0.75rem 0.15rem;
+    }
+    .ai-summary-text {
+      min-height: 2.8rem;
+      padding: 0.5rem 0.75rem 0.65rem;
+      font-size: 0.9375rem;
+      line-height: 1.64;
+    }
+    .ai-summary-footer {
+      padding: 0 0.75rem 0.7rem;
+      font-size: 0.8125rem;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ai-dots i {
+    .ai-summary-text.typing::after {
       animation: none;
     }
-    #ai-summary::before {
+    .ai-summary-card:not(.done) .ai-summary-dot {
+      animation: none;
+    }
+    .ai-summary-card.done .ai-summary-surface {
       animation: none;
     }
   }
@@ -276,10 +364,6 @@ const text = (summary ?? "").trim();
     const full = textEl.getAttribute("data-full") || "";
     let timer = null;
 
-    function setStatus(html) {
-      if (statusEl) statusEl.innerHTML = html;
-    }
-
     function play(speed) {
       if (timer) clearInterval(timer);
       if (!full) {
@@ -290,35 +374,42 @@ const text = (summary ?? "").trim();
       textEl.textContent = "";
       textEl.classList.add("typing");
       root.classList.remove("done");
-      // 摘要是服务端生成好的真实文本，打字机只是呈现方式，
-      // 徽章不能再显示「生成中」，否则又是假动效。
-      setStatus('已生成<span class="ai-dots"><i></i><i></i><i></i></span>');
+      if (statusEl) statusEl.textContent = "生成中…";
       timer = setInterval(() => {
-        // variable speed: 1-3 chars per tick feels like real streaming
-        i = Math.min(full.length, i + 1 + Math.floor(Math.random() * 2));
+        // 标点后稍作停顿，读起来更像真实输出
+        const ch = full[i] ?? "";
+        const step = /[，。！？、；：,.!?;:]/.test(ch) ? 2 : 3;
+        i = Math.min(full.length, i + step);
         textEl.textContent = full.slice(0, i);
         if (i >= full.length) {
           clearInterval(timer);
           timer = null;
           textEl.classList.remove("typing");
-          setStatus("✓ 已完成");
+          if (statusEl) statusEl.textContent = "✓ 已完成";
           root.classList.add("done");
         }
       }, speed);
     }
 
-    // start when scrolled into view (fallback: immediately)
-    const io = new IntersectionObserver(
-      entries => {
-        if (entries.some(e => e.isIntersecting)) {
-          io.disconnect();
-          play(24);
-        }
-      },
-      { threshold: 0.3 },
-    );
-    io.observe(root);
+    // 滚动进入视口再播放（省电，也更有"现场生成"的味道）
+    let started = false;
+    const io =
+      "IntersectionObserver" in window
+        ? new IntersectionObserver(
+            entries => {
+              if (started) return;
+              if (entries.some(e => e.isIntersecting)) {
+                started = true;
+                io.disconnect();
+                play(26);
+              }
+            },
+            { threshold: 0.3 },
+          )
+        : null;
+    if (io) io.observe(root);
+    else play(26);
 
-    refreshBtn?.addEventListener("click", () => play(14));
+    refreshBtn?.addEventListener("click", () => play(16));
   })();
 </script>

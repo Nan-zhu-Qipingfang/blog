@@ -3,21 +3,41 @@ export const prerender = false;
 
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { isAuthed } from "@/utils/adminAuth";
+import { listPosts } from "@/utils/adminStore";
 
 if (!(await isAuthed(Astro.cookies))) {
   return Astro.redirect("/admin/login");
 }
+
+const posts = await listPosts();
 ---
 
 <AdminLayout>
-  <div class="mx-auto max-w-4xl">
+  <div class="mx-auto max-w-5xl">
     <header class="mb-6">
       <h1 class="text-xl font-extrabold">评论管理</h1>
-      <p class="mt-1 text-sm text-foreground/50">全站用户评论的查看与删除</p>
+      <p class="mt-1 text-sm text-foreground/50">
+        置顶 / 称号 / 属地 / 删除。置顶的评论会排在这篇文章评论列表的最前面。
+      </p>
     </header>
 
-    <div class="overflow-hidden rounded-2xl border border-border/60 bg-card/60">
-      <table class="w-full text-left text-sm">
+    <div class="mb-4 flex flex-wrap items-center gap-3">
+      <select
+        id="filter-slug"
+        class="rounded-lg border border-border/25 bg-background px-3 py-1.5 text-sm outline-none focus:border-accent/50"
+      >
+        <option value="">全部文章</option>
+        {posts.map((p) => <option value={p.slug}>{p.title}</option>)}
+      </select>
+      <label class="flex cursor-pointer items-center gap-2 text-sm">
+        <input id="filter-pinned" type="checkbox" class="size-4 accent-[var(--accent)]" />
+        只看置顶
+      </label>
+      <span class="ml-auto text-xs text-foreground/40" id="summary"></span>
+    </div>
+
+    <div class="overflow-x-auto rounded-2xl border border-border/60 bg-card/60">
+      <table class="w-full min-w-[42rem] text-left text-sm">
         <thead>
           <tr class="border-b border-border/60 text-xs text-foreground/45">
             <th class="px-4 py-3 font-medium">时间</th>
@@ -33,57 +53,136 @@ if (!(await isAuthed(Astro.cookies))) {
         暂无评论
       </p>
     </div>
+    <p id="err-tip" class="hidden mt-3 text-center text-xs text-red-500/80"></p>
   </div>
 </AdminLayout>
 
 <script>
   function escapeHtml(text: string): string {
-    return text
+    return String(text)
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;");
   }
 
+  const filterSlug = document.getElementById("filter-slug") as HTMLSelectElement | null;
+  const filterPinned = document.getElementById("filter-pinned") as HTMLInputElement | null;
+  const summary = document.getElementById("summary") as HTMLElement | null;
+  const errTip = document.getElementById("err-tip") as HTMLElement | null;
+
+  async function patch(id: string, body: Record<string, unknown>): Promise<boolean> {
+    const res = await fetch("/api/admin/comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...body }),
+    });
+    const j = await res.json();
+    if (res.status === 401) {
+      location.href = "/admin/login";
+      return false;
+    }
+    return Boolean(j.ok);
+  }
+
   async function load() {
-    const response = await fetch("/api/admin/comments");
-    if (response.status === 401) {
+    const rows = document.getElementById("comment-rows");
+    const empty = document.getElementById("empty-tip");
+    if (!rows) return;
+    rows.innerHTML = "";
+
+    const params = new URLSearchParams();
+    const slug = filterSlug?.value ?? "";
+    if (slug) params.set("slug", slug);
+    const onlyPinned = Boolean(filterPinned?.checked);
+
+    const res = await fetch(`/api/admin/comments?${params.toString()}`);
+    if (res.status === 401) {
       location.href = "/admin/login";
       return;
     }
-    const result = await response.json();
-    const comments: any[] = result.comments ?? [];
-    const rows = document.getElementById("comment-rows");
-    if (!rows) return;
-    rows.innerHTML = "";
+    const result = await res.json();
+    const comments: any[] = (result.comments ?? []).filter(c => !onlyPinned || c.pinned);
+
+    // 统计只按接口返回的（不受只看置顶影响）
+    if (summary) summary.textContent = `共 ${(result.comments ?? []).length} 条`;
+
     for (const c of comments) {
       const date = new Date(c.createdAt);
       const timeText = Number.isNaN(date.getTime())
         ? "—"
         : date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+      const tags: string[] = [];
+      if (c.pinned) tags.push('<span class="whitespace-nowrap rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent">置顶</span>');
+      if (c.isOwner) tags.push('<span class="whitespace-nowrap rounded bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-background">站长</span>');
+      if (c.badge) tags.push(`<span class="whitespace-nowrap rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-foreground/60">称号：${escapeHtml(c.badge)}</span>`);
+      if (c.region) tags.push(`<span class="whitespace-nowrap text-[10px] text-foreground/40">属地 ${escapeHtml(c.region)}</span>`);
+
       const tr = document.createElement("tr");
       tr.className = "border-b border-border/30 last:border-0";
       tr.innerHTML = `
         <td class="whitespace-nowrap px-4 py-2.5 font-firacode text-xs text-foreground/50">${timeText}</td>
-        <td class="whitespace-nowrap px-4 py-2.5 text-xs font-semibold text-foreground/80">${escapeHtml(c.name)}</td>
+        <td class="whitespace-nowrap px-4 py-2.5 text-xs font-semibold text-foreground/80">${escapeHtml(c.name)}${tags.length ? `<div class="mt-1 flex flex-wrap gap-1">${tags.join("")}</div>` : ""}</td>
         <td class="whitespace-nowrap px-4 py-2.5 font-firacode text-xs text-accent/80">${escapeHtml(c.slug)}</td>
-        <td class="max-w-[22rem] truncate px-4 py-2.5 text-xs text-foreground/65" title="${escapeHtml(c.content)}">${escapeHtml(c.content)}</td>
+        <td class="max-w-[20rem] truncate px-4 py-2.5 text-xs text-foreground/65" title="${escapeHtml(c.content)}">${escapeHtml(c.content)}</td>
         <td class="whitespace-nowrap px-4 py-2.5">
+          <button data-pin="${c.id}" data-on="${c.pinned ? "1" : "0"}" type="button" class="cursor-pointer rounded-lg border border-transparent px-2 py-1 text-xs ${c.pinned ? "text-accent" : "text-foreground/60"} transition-colors hover:border-accent/30 hover:bg-accent/10 hover:text-accent">${c.pinned ? "取消置顶" : "置顶"}</button>
+          <input data-badge="${c.id}" value="${c.badge ? escapeHtml(c.badge) : ""}" maxlength="12" placeholder="称号" class="w-20 rounded-lg border border-border/20 bg-background px-2 py-1 text-xs outline-none focus:border-accent/50" />
           <button data-del="${c.id}" type="button" class="cursor-pointer rounded-lg border border-transparent px-2 py-1 text-xs text-red-500/80 transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-500">删除</button>
         </td>
       `;
       rows.appendChild(tr);
     }
+
+    rows.querySelectorAll<HTMLButtonElement>("[data-pin]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.pin!;
+        const on = btn.dataset.on === "1";
+        if (!(await patch(id, { pinned: !on }))) return;
+        void load();
+      });
+    });
+
+    rows.querySelectorAll<HTMLInputElement>("[data-badge]").forEach(inp => {
+      const commit = async () => {
+        const id = inp.dataset.badge!;
+        const value = inp.value.trim();
+        // 空值表示清除称号
+        if (value === (inp.dataset.prev ?? "")) return;
+        inp.dataset.prev = value;
+        if (!(await patch(id, { badge: value }))) return;
+        void load();
+      };
+      inp.addEventListener("change", commit);
+      inp.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          void commit();
+        }
+      });
+    });
+
     rows.querySelectorAll<HTMLButtonElement>("[data-del]").forEach(btn => {
       btn.addEventListener("click", async () => {
         if (!confirm("确定删除这条评论吗？")) return;
-        await fetch(`/api/admin/comments?id=${btn.dataset.del}`, { method: "DELETE" });
-        load();
+        const res = await fetch(`/api/admin/comments?id=${btn.dataset.del}`, { method: "DELETE" });
+        if (res.status === 401) {
+          location.href = "/admin/login";
+          return;
+        }
+        void load();
       });
     });
-    const empty = document.getElementById("empty-tip");
+
     if (empty) empty.classList.toggle("hidden", comments.length > 0);
+    if (errTip) {
+      errTip.hidden = comments.length > 0;
+      if (!comments.length) errTip.textContent = "没有符合条件的评论";
+    }
   }
 
-  load();
+  filterSlug?.addEventListener("change", () => void load());
+  filterPinned?.addEventListener("change", () => void load());
+  void load();
 </script>
