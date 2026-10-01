@@ -28,8 +28,10 @@ const missingVars = [
 
 const storageText = storageOk
   ? "KV 存储已启用：文章、日志正常持久化，保存后会自动触发重新部署。"
-  : kvStatus.redisUrlPresent && !kvStatus.redisUrlUsable
-    ? "检测到 REDIS_URL，但无法从中解析出主机或令牌。请手动添加 KV_REST_API_URL / KV_REST_API_TOKEN（Upstash 控制台里叫 REST URL / REST Token）。"
+  : kvStatus.redisUrlPresent
+    ? kvStatus.redisUrlUsable
+      ? "检测到 REDIS_URL，但它只是 Redis 直连地址（TCP），不能代替 REST API。请在 Vercel 项目环境变量中额外添加 KV_REST_API_URL 与 KV_REST_API_TOKEN，然后点击 Redeploy。"
+      : "检测到 REDIS_URL，但无法从中解析出主机或令牌。请手动添加 KV_REST_API_URL / KV_REST_API_TOKEN（Upstash 控制台里叫 REST URL / REST Token）。"
     : missingVars.length
       ? `未检测到环境变量：${missingVars.join("、")}。绑定 Redis 后必须点击一次 Redeploy，已部署的函数实例不会自动刷新环境变量。`
       : "未检测到 KV 存储。线上文件系统只读，导入与保存文章会失败。请在 Vercel 项目设置里绑定 Redis(Upstash) 数据库并重新部署。";
@@ -49,7 +51,7 @@ const envDiagnostics = {
     .sort(),
 };
 
-// A real round-trip (set/get/del) — proves the derived REST endpoint works.
+// A real round-trip (set/get/del) — proves the REST endpoint works.
 const probe = await kvProbe();
 
 const inputClass =

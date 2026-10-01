@@ -7,12 +7,10 @@
  *
  *   KV_REST_API_URL / KV_REST_API_TOKEN   (Vercel KV, injected automatically)
  *   UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN
- *   REDIS_URL                             (rediss://default:TOKEN@host:port)
  *
- * The last one matters: some Vercel / Upstash integrations inject ONLY
- * `REDIS_URL` (a direct Redis connection string) and no REST variables at all.
- * Upstash serves the REST API from the same host with the same credential, so
- * we derive `https://<host>` + the password from it.
+ * `REDIS_URL` (rediss://default:TOKEN@host:port) is a direct Redis/TCP
+ * connection string; it is NOT the same as the REST endpoint/token, so it is
+ * only shown in diagnostics and will NOT be used to auto-enable KV.
  *
  * When nothing is configured (local development) the store transparently
  * falls back to JSON files on disk, preserving the original dev experience.
@@ -41,16 +39,17 @@ function deriveFromRedisUrl(
 
 const derived = deriveFromRedisUrl(process.env.REDIS_URL || "");
 
+// 只接受显式的 REST 变量作为启用 KV 的凭据。REDIS_URL 是 Redis 直连协议（TCP），
+// 其主机/密码并不能可靠地充当 Upstash REST API 的 endpoint/token，所以不能用它
+// 自动开启 KV；否则运行时会认为 KV 已启用，实际调用却 401/404，导致所有读写出错。
 const REST_URL = (
   process.env.KV_REST_API_URL ||
   process.env.UPSTASH_REDIS_REST_URL ||
-  derived?.url ||
   ""
 ).replace(/\/+$/, "");
 const REST_TOKEN =
   process.env.KV_REST_API_TOKEN ||
   process.env.UPSTASH_REDIS_REST_TOKEN ||
-  derived?.token ||
   "";
 
 export const kvEnabled = Boolean(REST_URL && REST_TOKEN);
@@ -64,8 +63,10 @@ export const kvStatus = {
     ? "KV_REST_API_URL"
     : process.env.UPSTASH_REDIS_REST_URL
       ? "UPSTASH_REDIS_REST_URL"
-      : derived
-        ? "REDIS_URL（已自动推导 REST 端点）"
+      : process.env.REDIS_URL
+        ? derived
+          ? "REDIS_URL（已解析主机，但 REST API 需显式 KV_REST_API_URL/TOKEN）"
+          : "REDIS_URL（格式无法解析，无法使用）"
         : "(无)",
   /** True when REDIS_URL existed but could not be parsed into host + token. */
   redisUrlPresent: Boolean(process.env.REDIS_URL),

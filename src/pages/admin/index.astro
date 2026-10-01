@@ -15,6 +15,7 @@ if (!(await isAuthed(Astro.cookies))) {
     <header class="mb-6">
       <h1 class="text-xl font-extrabold">仪表盘</h1>
       <p class="mt-1 text-sm text-foreground/50">博客运行概况一览</p>
+      <p id="dashboard-error" class="mt-2 hidden rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500"></p>
     </header>
 
     <!-- Stat cards -->
@@ -77,14 +78,20 @@ if (!(await isAuthed(Astro.cookies))) {
   const fmt = new Intl.NumberFormat("zh-CN");
 
   async function loadDashboard() {
-    const response = await fetch("/api/admin/stats");
-    if (response.status === 401) {
-      location.href = "/admin/login";
-      return;
-    }
-    const { stats } = await response.json();
+    const errorEl = document.getElementById("dashboard-error");
+    try {
+      const response = await fetch("/api/admin/stats");
+      if (response.status === 401) {
+        location.href = "/admin/login";
+        return;
+      }
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`服务器返回 ${response.status}${body ? "：" + body.slice(0, 200) : ""}`);
+      }
+      const { stats } = await response.json();
 
-    const setStat = (id: string, value: string) => {
+      const setStat = (id: string, value: string) => {
       const el = document.querySelector(`[data-stat-value="${id}"]`);
       if (el) el.textContent = value;
     };
@@ -146,6 +153,11 @@ if (!(await isAuthed(Astro.cookies))) {
         `;
         list.appendChild(li);
       }
+    }
+  } catch (err) {
+    if (errorEl) {
+      errorEl.textContent = `数据加载失败：${err instanceof Error ? err.message : String(err)}。请刷新，或到「设置」页查看存储状态。`;
+      errorEl.classList.remove("hidden");
     }
   }
 
